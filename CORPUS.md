@@ -128,7 +128,11 @@ docker run --rm --entrypoint lisply-index --user "$(id -u):$(id -g)" \
 
 (`--entrypoint` matters: the image's own entrypoint starts the console
 and ignores the command.  `--user` matters on a CI runner: the image's
-user is uid 1000, and the output directory is yours.)
+user is uid 1000, and the output directory is yours.  Images from
+before the evening of 2026-09-14 keep the script under the image
+user's 0700 home only, so `--user` cannot reach it there; with those,
+drop `--user` and `chmod 777` the output directory for the run
+instead.)
 
 Other producers are welcome (the Readymax console has an Emacs Lisp
 one for its own corpus); what makes them conforming is the file they
