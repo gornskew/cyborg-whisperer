@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 640" width="480" height="640">
+<title>Cyborg Whisperer: a lambda-bearing robot</title>
+<ellipse cx="269" cy="608" rx="215" ry="34" fill="#000" opacity="0.12"/>
+<polygon points="104.0,588.0 344.0,588.0 434.0,498.0 194.0,498.0" fill="#ffcf00" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="344.0,604.0 434.0,514.0 434.0,498.0 344.0,588.0" fill="#906400" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="104.0,604.0 344.0,604.0 344.0,588.0 104.0,588.0" fill="#e8a200" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="247.3,393.8 277.3,393.8 290.8,380.3 260.8,380.3" fill="#ffcf00" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="277.3,549.8 290.8,536.3 290.8,380.3 277.3,393.8" fill="#906400" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="247.3,549.8 277.3,549.8 277.3,393.8 247.3,393.8" fill="#e8a200" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="141.1,170.9 169.1,170.9 188.9,151.1 160.9,151.1" fill="#d4ff00" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="169.1,382.9 188.9,363.1 188.9,151.1 169.1,170.9" fill="#679500" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="141.1,382.9 169.1,382.9 169.1,170.9 141.1,170.9" fill="#a6f000" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="145.8,380.2 157.8,380.2 172.2,365.8 160.2,365.8" fill="#ffffff" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="157.8,406.2 172.2,391.8 172.2,365.8 157.8,380.2" fill="#7d7d7d" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="145.8,406.2 157.8,406.2 157.8,380.2 145.8,380.2" fill="#c9c9c9" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="159.8,380.2 171.8,380.2 186.2,365.8 174.2,365.8" fill="#ffffff" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="171.8,406.2 186.2,391.8 186.2,365.8 171.8,380.2" fill="#7d7d7d" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="159.8,406.2 171.8,406.2 171.8,380.2 159.8,380.2" fill="#c9c9c9" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="152.0,176.0 332.0,176.0 386.0,122.0 206.0,122.0" fill="#2121ff" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="332.0,414.0 386.0,360.0 386.0,122.0 332.0,176.0" fill="#10109e" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="152.0,414.0 332.0,414.0 332.0,176.0 152.0,176.0" fill="#1a1aff" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="349.1,170.9 377.1,170.9 396.9,151.1 368.9,151.1" fill="#ff2828" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="377.1,382.9 396.9,363.1 396.9,151.1 377.1,170.9" fill="#9e1313" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="349.1,382.9 377.1,382.9 377.1,170.9 349.1,170.9" fill="#ff1f1f" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="353.8,380.2 365.8,380.2 380.2,365.8 368.2,365.8" fill="#ffffff" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="365.8,406.2 380.2,391.8 380.2,365.8 365.8,380.2" fill="#7d7d7d" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="353.8,406.2 365.8,406.2 365.8,380.2 353.8,380.2" fill="#c9c9c9" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="367.8,380.2 379.8,380.2 394.2,365.8 382.2,365.8" fill="#ffffff" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="379.8,406.2 394.2,391.8 394.2,365.8 379.8,380.2" fill="#7d7d7d" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="367.8,406.2 379.8,406.2 379.8,380.2 367.8,380.2" fill="#c9c9c9" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="215.5,102.5 295.5,102.5 322.5,75.5 242.5,75.5" fill="#00ffff" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="295.5,162.5 322.5,135.5 322.5,75.5 295.5,102.5" fill="#008e8e" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="215.5,162.5 295.5,162.5 295.5,102.5 215.5,102.5" fill="#00e5e5" stroke="#000" stroke-opacity="0.35" stroke-width="1.5" stroke-linejoin="round"/>
+<rect x="227.5" y="120.5" width="14" height="10" fill="#003c3c"/>
+<rect x="269.5" y="120.5" width="14" height="10" fill="#003c3c"/>
+<text x="242" y="350" text-anchor="middle" font-family="Georgia, 'DejaVu Serif', 'Times New Roman', serif" font-weight="bold" font-size="168" fill="#fff" fill-opacity="0.96">λ</text>
+</svg>

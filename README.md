@@ -22,7 +22,7 @@ ANY WARRANTY; see <https://www.gnu.org/licenses/agpl-3.0.html>.
 
 # Cyborg Whisperer: a Protocol Officer for Lisp-Speaking Crews
 
-<img src="scripts/robot-lambda.png" alt="Robot with Lambda machine"
+<img src="img/robot-lambda.png" alt="The Cyborg Whisperer robot, a lambda on its chest"
 width="300">
 
 Aboard a [Basilisk](https://github.com/gornskew/basilisk)-class
