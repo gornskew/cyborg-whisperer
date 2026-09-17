@@ -8,6 +8,18 @@ License, or (at your option) any later version.  Distributed WITHOUT
 ANY WARRANTY; see <https://www.gnu.org/licenses/agpl-3.0.html>.
 -->
 
+> [!IMPORTANT]
+> **Looking for lisply-mcp?**  The plain-language "corporate" fork
+> lives at [genworks/lisply-mcp](https://github.com/genworks/lisply-mcp).
+>
+> This repository (`cyborg-whisperer`) is the gaming-language upstream
+> and is maintained separately.  A clone whose `origin` still points at
+> `gornskew/lisply-mcp` lands here; to follow the fork instead:
+>
+> ```bash
+> git remote set-url origin https://github.com/genworks/lisply-mcp.git
+> ```
+
 # Cyborg Whisperer: a Protocol Officer for Lisp-Speaking Crews
 
 <img src="scripts/robot-lambda.png" alt="Robot with Lambda machine"
