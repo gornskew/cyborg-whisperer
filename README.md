@@ -38,21 +38,23 @@ member who answers the _Lisply_ dialect, aboard ship or ashore, and
 arriving cyborgs find themselves received, educated, and set to
 useful work.
 
-Plainly: this project is a [Model Context Protocol
-(MCP)](https://modelcontextprotocol.org) middleware that enables
-[Large Language Models
-(LLMs)](https://en.wikipedia.org/wiki/Large_language_model) — the
-cyborgs — to interact with [Lisp-based](https://common-lisp.net/)
-development and runtime environments — the crew — using a lightweight
-protocol called _Lisply_.
+Plainly: this is the middleware that speaks
+[MCP](https://modelcontextprotocol.org) — the Muster-and-Conduct
+Protocol, in which an Officer musters each arriving cyborg and
+conducts it to its crew member — to the [large language
+models](https://en.wikipedia.org/wiki/Large_language_model) that are
+the cyborgs, and a lightweight dialect called _Lisply_ to the
+[Lisp](https://common-lisp.net/) residents that are the crew.
 
-**Note: This kit does not start or manage containers.** It is a pure
-HTTP client to an already-running Lisply backend. Container lifecycle
-is owned by docker compose — see "Running it" in the [Basilisk
-README](https://github.com/gornskew/basilisk) — or run your own
-Lisply backend directly on a host and point the wrapper at its
-host/port. Once a backend is running, Claude Desktop connects to it
-according to the example configurations below.
+**Note: the Officer raises no residence.** He is a caller at a hatch
+that is already open — a pure HTTP client (HTTP being the
+Hatch-To-hatch Transfer Protocol, a plain hail from one hatch to
+another) to a resident already answering. Raising rooms is the vat's
+business, through the Basilisk yard — see "Running it" in the
+[Basilisk README](https://github.com/gornskew/basilisk) — or open a
+Lisply hatch of your own on the dock and point the Officer at it.
+Once a resident answers, Claude Desktop calls on him as the example
+registries below show.
 
 ## Who Is this Meant For?
 
@@ -65,20 +67,18 @@ according to the example configurations below.
 
 ## What Is it Meant to Do?
 
-The Cyborg Whisperer middleware connects
-[MCP-capable](https://modelcontextprotocol.org) AI Agent programs, or
-_MCP Clients_, such as
-[ClaudeDesktop](https://www.anthropic.com/claude), to Lisp-based
-systems which support a REPL, or Read-Eval-Print Loop. The connection
-is meant to facilitate AI-assisted symbolic programming sometimes
-referred to as _Neuro-Symbolic Programming_. We have coined the term
-"Lisply" to refer to a lightweight protocol which most any Lisp-like
-system can implement so that its resident may stand with a Protocol
-Officer of his own.
+The Officer connects the craft a cyborg arrives in — any
+[MCP-capable](https://modelcontextprotocol.org) client, such as
+[Claude Desktop](https://www.anthropic.com/claude) — to a Lisp
+resident who keeps a REPL, a Read-Eval-Print Loop. The connection is
+meant for AI-assisted symbolic programming, sometimes called
+_Neuro-Symbolic Programming_. We coined "Lisply" for the small
+dialect most any Lisp-like resident can learn so as to stand with a
+Protocol Officer of his own.
 
-The idea is that the LLM will be able to generate and evaluate
-arbitrary Lisp expressions, including creating, compiling, loading,
-and testing entire files and projects.
+The idea is that the cyborg can compose and have worked arbitrary
+Lisp incantations, up to and including writing, compiling, loading
+and testing whole scrolls and projects.
 
 ## Sandbox Trust Model
 
@@ -107,36 +107,36 @@ Follow "Running it" in the [Basilisk
 README](https://github.com/gornskew/basilisk) — `git clone` the yard,
 then `./basilisk up`.
 
-This will get you a Docker Compose setup including a preconfigured
-containerized Protocol Officer already at his post beside the Captain.
+This raises a whole ship, with a Protocol Officer already at his post
+beside the Captain.
 
 
 ## Quick Start
 
-The following will get you up and running quickly with a minimal
-default configuration and a default public Common Lisp based backend
-running as a Docker container. See the main Contents below for more
-background and detailed configuration options.
+The following gets you going quickly with a minimal default
+registry and the default public Common Lisp resident (the First
+Officer, a Gendl room raised from the vat). See the main Contents
+below for more background and every flag.
 
 ### 1. Install
 
 1. Install Node.js (18+ recommended). If on Windows, this can be
    installed directly in Windows or in WSL.
 
-2. Have a running Lisply backend to connect to. The easiest way is
-   the docker compose stack from the [Basilisk
-   README](https://github.com/gornskew/basilisk) (requires
-   [Docker](https://docs.docker.com/engine/install/)); alternatively,
-   run any Lisply-compliant backend directly on your host.
+2. Have a resident with an open hatch to call on. The easiest way is
+   a ship raised from the [Basilisk
+   yard](https://github.com/gornskew/basilisk) (requires a vat:
+   [Docker](https://docs.docker.com/engine/install/)); or open a
+   Lisply hatch of your own on the dock.
 
-3. Clone this `cyborg-whisperer` repository to a location where your
-   MCP-capable AI Agent (e.g. Claude Desktop) can access it.
+3. Copy these `cyborg-whisperer` scrolls to somewhere the craft (Claude
+   Desktop, say) can reach.
    
  
-### 2. Configure your MCP-capabile AI Agent
+### 2. Tell the craft where the Officer stands
 
-Edit or create your AI Agent's configuration file as shown below. In
-the case of Claude Desktop, the configuration file is typically:
+Edit or create the craft's registry as shown below. For Claude
+Desktop, the registry is typically:
 
 
 ```
@@ -149,8 +149,10 @@ or
 c:\Users\<user>\AppData\Roaming\Claude\claude_desktop_config.json
 ```
 
-In the example below, replace `/path/to/cloned/` with the correct path
-to the `./scripts/mcp-wrapper.js` file from the cloned repo:
+In the example below, replace `/path/to/cloned/` with the real path
+to the `./scripts/mcp-wrapper.js` scroll in your copy. The channel
+names are yours to choose; these are the rooms' own, as a Basilisk
+ship names them:
 
 ```json
 {
@@ -220,98 +222,91 @@ Windows host):
 ```
 
 
-See the main Contents below for further configuration options, for
-example how to specify an alternative Lisply backend service
-host/port. (Sharing/mounting host directories into containerized
-backends is configured in the docker compose setup, e.g. Basilisk's
-`./basilisk`, not by this wrapper.)
+See the main Contents below for the other flags, for example how to
+name a resident's hatch elsewhere. (Stowing pouches from the dock
+aboard a residence is the yard's business — Basilisk's articles — not
+the Officer's.)
 
 
-Each server operates independently, allowing you to work with multiple
-Lisp environments simultaneously without tool name conflicts.
+Each channel stands on its own, so several residents can be worked at
+once without their tools colliding.
 
 
-### 3. Restart your AI Agent and Test
+### 3. Wake the craft afresh, and hail
 
-With the above configuration in place, your freshly restarted AI Agent
-will now have access to an MCP server called `gendl-ccl`, with a
-`gendl-ccl__lisp_eval` MCP tool (among a few other tools discussed in the main
-Contents below). Note that tools are automatically prefixed with the server
-name to avoid conflicts when running multiple Lisply servers.
+With the registry in place, the freshly woken craft has a channel
+called `bridge`, with a `bridge__lisp_eval` tool (among the few others
+discussed in the main Contents below). Tools carry the channel's name
+as a prefix, so several Officers can stand at once without colliding.
 
-In order to test your setup, you can prompt your LLM as follows:
+To try it, hail the cyborg:
 
 >
-> Evaluate `(+ 1 2 3)` using the gendl-ccl__lisp_eval tool, and let me know the
+> Evaluate `(+ 1 2 3)` using the bridge__lisp_eval tool, and let me know the
 > result.
 >
 
-The LLM should invoke the requested evaluation and respond with `6` as
-expected. Feel free to experiment with more complex expressions before
-proceeding.
+The cyborg should have the incantation worked and answer `6`. Try
+more complex incantations before going on.
 
 
 ## How Does the Default Minimal Configuration Work?
 
-The minimal default configuration described in the Quick Start above
-connects to an already-running
-[Gendl](https://gitlab.common-lisp.net/gendl/gendl) backend (for
-example from a Basilisk stack), a Common Lisp
-superset sporting a standard REPL (Read-Eval-Print Loop). The wrapper
-itself never pulls or starts containers. Note a second Lisply backend implementation
-for Emacs lisp also exists, within the
+The minimal registry of the Quick Start calls on a
+[Gendl](https://gitlab.common-lisp.net/gendl/gendl) resident already
+answering (aboard a Basilisk ship, say): a Common Lisp superset with a
+standard REPL. The Officer himself raises nothing. A second Lisply
+hatch, in Emacs Lisp, is kept by the Captain of the
 [Readymax](https://github.com/gornskew/readymax/tree/devo/dot-files/emacs.d/sideloaded/lisply-backend)
-project (the ready room whose resident is the Captain).
+ready room.
 
 
 
 ## System Overview
 
-The Cyborg Whisperer middleware is implemented as a Javascript program meant
-to run in Node.js, and provides a bridge between your AI Agent and any
-[compliant Lisply backend system](BACKEND-REQS.md). This wrapper
-enables the AI Agent to:
+The Officer is a JavaScript program standing on Node.js, a bridge
+between the craft and any resident who [answers the Lisply
+dialect](BACKEND-REQS.md). Through him a cyborg can:
 
-1. Evaluate Lisp code in the Lisply Backend and receive the  results.
-2. Make HTTP requests to any web endpoints implemented in the backend.
-3. Access introspection and documentation lookup facilities in the LB
-   using Lisp evaluation.
-4. Create, manipulate, compile, load, and analyze files, again using
-   Lisp evaluation.
+1. hand the resident an incantation and read back what came of it;
+2. hail any web hatch the resident keeps;
+3. consult the resident's own lore — introspection, documentation — by
+   incantation;
+4. write, compile, load and study scrolls, again by incantation.
 
-[Lisply](./BACKEND-REQS.md) is a lightweight protocol that specifies a
-minimal yet flexible set of HTTP interfaces, a standard set of
-environment variables, and several optional capabilities to facilitate AI agents
-controlling your running Lisp system.
+[Lisply](./BACKEND-REQS.md) is the small dialect: a few hatches (HTTP
+paths), a standard set of flags hoisted at raising (environment
+variables), and a few optional abilities, so that cyborgs may work a
+living Lisp resident.
 
 ## Architecture
 
-The diagram below roughly captures how the components interact:
+The drawing below roughly shows who stands where:
 
 
 ```mermaid
 flowchart TB
-    User("User") <--> Claude("Claude Desktop")
-    User <-.-> Emacs("Emacs Text Editor (Optional)")
+    User("the biological") <--> Claude("the craft (Claude Desktop)")
+    User <-.-> Emacs("an Emacs of your own (optional)")
 
-    Claude <--> MCP("MCP Protocol")
-    MCP <--> Wrapper("Cyborg Whisperer (Node.js MCP Wrapper)")
+    Claude <--> MCP("MCP")
+    MCP <--> Wrapper("the Protocol Officer (Cyborg Whisperer, Node.js)")
 
-    Wrapper --> LisplyHttp("Lisply HTTP Server")
+    Wrapper --> LisplyHttp("the resident's Lisply hatch (HTTP)")
     
-    subgraph Backend ["Lisply Backend (container or host process)"]
-    subgraph LisplyExec["Lisply Executable"]
+    subgraph Backend ["the residence (a room, or a process on the dock)"]
+    subgraph LisplyExec["the resident"]
     LisplyHttp
-    LisplySwank("Lisply SWANK Server (for Emacs connection)")
+    LisplySwank("the SWANK hatch (for an Emacs of your own)")
     end
     end
     
     Emacs <-.-> LisplySwank
     
-    KB[("Lisply Knowledge Base")] <--> Wrapper
+    KB[("the chart locker (the corpus)")] <--> Wrapper
     
-    LisplyHttp --> Endpoints("RESTful Endpoints")
-    LisplyHttp --> LispEval("Lisp Evaluation")
+    LisplyHttp --> Endpoints("web hatches")
+    LisplyHttp --> LispEval("incantations")
     
     style User fill:#ff9,stroke:#333,stroke-width:2px
     style Claude fill:#f9f,stroke:#333,stroke-width:2px
@@ -327,33 +322,31 @@ flowchart TB
     style LispEval fill:#bfb,stroke:#333,stroke-width:1px
 ```
 
-The middleware handles:
-1. Translating Lisp evaluation requests between the MCP protocol and
-   the backend [Lisply API](BACKEND-REQS.md)
-2. Error handling and logging
+The Officer:
+1. turns a tool call in MCP into a hail at the resident's [Lisply
+   hatch](BACKEND-REQS.md), and the answer back into a tool result
+2. keeps the smoke (his log), and reports what went wrong
 
 ## Security Considerations
 
-Because Cyborg Whisperer allows arbitrary Lisp code to be evaluated against
-a running Lisp-based backend, there are certain risks in case the LLM
-were to go "haywire." Therefore, best practices are:
+Because the Officer lets arbitrary Lisp be worked in a living
+resident, there are risks should the cyborg go "haywire." Best
+practice, plainly:
 
-- Allow the wrapper to connect only to a containerized version of a
-  Lisply backend. If overriding default host/port, the wrapper will
-  happily connect to any live Lisply-compliant http port. Avoid
-  allowing this to happen for any http ports being served by programs
-  running directly on your host.
+- Let the Officer call only on a resident living in a container. Given
+  another host and port, he will happily call at any live
+  Lisply-compliant HTTP port -- do not let that be a port served by a
+  program running directly on your own machine.
 
-- Make sure not to mount any non-expendable directories into that
-  container (directory mounting is configured in your docker compose
-  setup, not by this wrapper)
+- Mount nothing you cannot afford to lose into that container (what is
+  mounted is the yard's business -- the compose setup -- not the
+  Officer's).
 
-- Consider taking steps to [limit RAM and CPU
-  usage](https://docs.docker.com/engine/containers/resource_constraints/)
+- Consider [limiting the RAM and CPU](https://docs.docker.com/engine/containers/resource_constraints/)
   of the container.
   
 
-### Code Modules/Files
+### The scrolls in this chest
 
 - **lib/config.js**: Configuration loading and environment handling
 - **lib/logger.js**: Logging functionality 
@@ -372,33 +365,32 @@ were to go "haywire." Therefore, best practices are:
   - **lisplySearch.js**: Document-corpus search handler, the
     `lisply_search` tool (backends that advertise it, e.g. Readymax
     rooms)
-- **mcp-wrapper.js**: <--- Main entry point  <---
+- **mcp-wrapper.js**: the Officer himself -- start here
 
 
 
-## Detailed Installation
+## Posting the Officer by hand
 
 1. Clone this repository:
 ```bash
 git clone https://github.com/gornskew/cyborg-whisperer.git
 ```
 
-2. Install the required dependencies (optional, as the wrapper auto-installs dependencies):
+2. Install what he stands on (optional; the Officer fetches it himself when missing):
 ```bash
 cd cyborg-whisperer/scripts
 npm install # optional - the script will attempt to do this also if needed
 chmod +x mcp-wrapper.js # needed on some systems
 ```
 
-3. Test the script:
+3. Ask him for his flags:
 ```bash
 node mcp-wrapper.js --help
 ```
 
-## Advanced Configuration
+## The Officer's flags
 
-Optional settings for advanced users, with defaults suitable for most
-cases:
+Optional settings, with defaults suitable for most postings:
 
 ### Command-Line Arguments
 
@@ -425,13 +417,12 @@ Options:
 
 ### Environment Variables
 
-The script also supports configuration via environment variables. You
-can specify variables with the "LISPLY_" prefix or with no prefix:
+The Officer also reads flags hoisted at raising (environment
+variables), with the "LISPLY_" prefix or with none:
 
-**Note:** It is important to keep straight the difference between host
-ports (listening on and reachable from the host system) and container
-ports (internal to the container, visible to the Lisply backend
-service process):
+**Note:** keep straight the difference between a hatch on the dock
+(listening on, and reachable from, the host machine) and a hatch
+inside the residence (what the resident himself sees):
 
 | Environment Variable | Description | Default |
 |----------------------|-------------|---------|
@@ -452,35 +443,34 @@ service process):
 | `TRUST_AS_SANDBOX` or `LISPLY_TRUST_AS_SANDBOX` | Advertise backend as an explicitly trusted sandbox in tool metadata | true |
 | `SANDBOX_NOTE` or `LISPLY_SANDBOX_NOTE` | Override the sandbox-note text shown in tool metadata | (built-in note) |
 
-## Container Lifecycle: Docker Compose, Not This Wrapper
+## Raising rooms is the vat's business, not the Officer's
 
-Earlier versions of this wrapper could pull, start, and manage backend
-Docker containers itself (image selection, volume mounting, auto-start,
-existing-service detection). That entire subsystem has been removed.
-The wrapper is now a pure HTTP client: it connects to whatever Lisply
-backend is already listening at the configured host and port, and
-reports a helpful error (with a compose hint) when nothing is there.
+Earlier Officers could pull, raise and mind residences themselves
+(choosing the casting, stowing pouches, raising on demand, sensing a
+room already up). That whole subsystem is in the attic. The Officer is
+now a pure caller: he hails whatever resident already answers at the
+host and hatch he was given, and says so helpfully (with a hint to
+raise the ship) when nobody is home.
 
-For a containerized backend stack (Gendl, Readymax, etc.), use
-Basilisk, the compose framework at
-`gitlab.genworks.com:gornskew/basilisk` (`./basilisk up`),
-which owns image selection, volume mounting, port publishing, and UID
-mapping. For a non-containerized backend, start any Lisply-compliant
-server yourself (e.g. the host-Emacs path described in readymax
-`docs/HOST_EMACS_MCP.md`) and point the wrapper at its host and port.
+For rooms raised from the vat (Gendl, Readymax and the rest), use the
+Basilisk yard, `gitlab.genworks.com:gornskew/basilisk` (`./basilisk
+up`), whose articles choose the castings, stow the pouches, open the
+hatches on the dock and map the uids. For a resident living on the
+dock, open the hatch yourself (the space-suit path in readymax
+`docs/HOST_EMACS_MCP.md`, say) and point the Officer at it.
 
 ## Communication
 
 Two links are involved, and they are easy to conflate:
 
-1. **AI Agent ↔ wrapper**: MCP protocol over standard input/output
-   (the standard MCP stdio transport). This is JSON-RPC plumbing
-   managed by your MCP client, unrelated to any backend REPL.
+1. **craft ↔ Officer**: MCP over standard input/output (the standard
+   MCP stdio transport). JSON-RPC plumbing the craft manages, nothing
+   to do with any resident's REPL.
 
-2. **Wrapper ↔ backend**: HTTP only. The wrapper POSTs to the
-   backend's Lisply HTTP endpoints and returns structured responses.
+2. **Officer ↔ resident**: HTTP only. The Officer POSTs at the
+   resident's Lisply hatches and returns structured answers.
 
-**Characteristics of the HTTP backend link:**
+**What the hatch link is like:**
 - Structured responses with separate result, stdout, and error fields
 - Errors are trapped by the backend and returned as strings
 - Response format: `{Result: <result>, Stdout: <output>, Error: <any error>}`
@@ -490,25 +480,23 @@ Two links are involved, and they are easy to conflate:
 {"Result": "6", "Stdout": "This is a message to standard output"}
 ```
 
-An earlier "stdio mode", which talked to a wrapper-started
-container's raw REPL (interactive debugger, incremental output), was
-removed along with container auto-starting. Equivalent capabilities
-may return at the HTTP layer in the future (e.g. a restarts endpoint,
-streamed output) without re-coupling the wrapper to container
-lifecycle.
+An earlier "stdio mode", which spoke to the raw REPL of a residence
+the Officer had raised himself (the interactive debugger, output as it
+came), went to the attic with the raising. The like may return at the
+hatch (a restarts hatch, streamed output) without tying the Officer
+to the vat again.
 
 ## Usage Examples 
 
-All the examples below can be tested on command line and used in
-`claude_desktop_config.json` configuration (see the Quick Start
-configuration examples above).
+All the examples below can be tried at a shell and used in the
+`claude_desktop_config.json` registry (see the Quick Start above).
 
-## Adding a Separate, Compatible Filesystem MCP Server
+## A second channel beside the Officer: a filesystem server
 
-Below is a `claude_desktop_config.json` which sets up a filesystem mcp
-server as well as our `lisply-gendl` server. (The filesystem
-server gets its mount here; any mounts into a containerized Lisply
-backend are configured in the compose setup, not by this wrapper.)
+Below is a `claude_desktop_config.json` that posts a filesystem MCP
+server beside our `lisply-gendl` Officer. (The filesystem server
+takes its pouch here; pouches stowed aboard a residence are the
+yard's articles, not the Officer's.)
 
 
 ```json
@@ -542,23 +530,23 @@ backend are configured in the compose setup, not by this wrapper.)
 }
 ```
 
-### Tool Details for Claude
+### The tools he grants, in detail
 
-#### Lisp Evaluation Tool (`<server>__lisp_eval`)
+#### The incantation (`<channel>__lisp_eval`)
 
-The `lisp_eval` tool (prefixed with the server name, e.g., `gendl__lisp_eval`) 
-allows Claude to evaluate Lisp code directly within the Lisply environment 
-with these parameters:
+The `lisp_eval` tool (prefixed with the channel name, e.g. `gendl__lisp_eval`)
+lets a cyborg hand the resident an incantation to work, with these
+parameters:
 
 - `code` (required): The Lisp code to evaluate
 - `package` (optional): The package to use for the evaluation
 
-#### HTTP Request Tool (`<server>__http_request`)
+#### The hail (`<channel>__http_request`)
 
-The `http_request` tool (prefixed with the server name, e.g., `gendl__http_request`) 
-enables the AI Agent to interact with any HTTP endpoint exposed by the Lisply 
-backend (the following example works with our default backend, which has a 
-built-in `/color-map` http endpoint):
+The `http_request` tool (prefixed with the channel name, e.g. `gendl__http_request`)
+lets a cyborg reach any web hatch the resident keeps (this example
+works against the default Gendl resident, whose `/color-map` hatch is
+built in):
 
 ```json
 {
@@ -570,22 +558,21 @@ built-in `/color-map` http endpoint):
 }
 ```
 
-#### Ping Tool (`<server>__ping_lisp`)
+#### Is anyone home (`<channel>__ping_lisp`)
 
-The `ping_lisp` tool (prefixed with the server name, e.g., `gendl__ping_lisp`) 
-lets Claude confirm that the Lisply server is running:
+The `ping_lisp` tool (prefixed with the channel name, e.g. `gendl__ping_lisp`)
+lets a cyborg confirm that the resident answers:
 
 ```
 <server>__ping_lisp()
 ```
 
-## Real-World Examples
+## A first incantation, worked
 
-### Example 1: Creating a Parametric Box
+### Example 1: a parametric box
 
-In this example, Claude creates a parametric box in the Lisply
-environment and then modifies its properties based on user
-requirements.
+Here a cyborg (Claude) has the resident build a parametric box, then
+changes it as the biological asks.
 
 **User**: "Can you create a box with width 10, height 5, and depth 3?
 Then show me how to change the height to 8."
@@ -639,38 +626,37 @@ Documentation](https://gornschool.com) for details.
 
 ### Common Issues and Solutions
 
-#### Backend Not Running
+#### Nobody home
 
-If the wrapper reports it cannot reach the backend:
+If the Officer reports he cannot reach the resident:
 
-1. For the containerized stack, make sure the compose services are up:
+1. Aboard ship, make sure the ship is raised:
 ```bash
 cd ~/projects/basilisk && ./basilisk up
 ```
 
-2. Check whether anything is listening on the expected port:
+2. Hail the hatch yourself:
 ```bash
 curl http://localhost:9081/lisply/ping-lisp
 ```
 
-#### Connection Errors
+#### The craft cannot get through
 
-If the LLM Agent / MCP Client cannot connect to the configured Lisply
-backend:
+If the craft cannot reach the resident it was pointed at:
 
-1. Check if the Lisply server is running (for the compose stack):
+1. Is the ship raised (aboard ship)?
 ```bash
-docker ps    # the stack's containers should be listed and healthy
+docker ps    # every room listed, and healthy
 ```
 
 
-2. Check the wrapper's log file:
+2. Read the Officer's smoke:
 ```bash
 tail -f /tmp/lisply-mcp-wrapper.log
 ```
 
-3. Check the Claude Desktop log file with Windows tools
-   e.g. Notepad. This is typically in a location such as:
+3. Read the craft's own smoke (Claude Desktop's log) with Windows
+   tools, e.g. Notepad. Typically at:
 
 WSL/Linux:
 ```
@@ -683,50 +669,48 @@ c:\Users\<user>\AppData\Roaming\Claude\logs\mcp-server-lisply.log
 ```
 
 
-5. Try curling to the Lisply HTTP server:
+5. Hail the hatch yourself:
 ```bash
 curl http://localhost:9081/lisply/ping-lisp
 ```
 
-6. Try connecting to the Lisply SWANK server (on default port 4201):
+6. Try the SWANK hatch (4201 on the dock by default):
 ```bash
 M-x slime-connect  ;; from emacs
 ```
 
-Note that setting up the
-[Readymax](https://github.com/gornskew/readymax) configuration
-will enable `M-x slime-connect` in your emacs.
+A Captain wearing the [Readymax](https://github.com/gornskew/readymax)
+scrolls knows `M-x slime-connect` already.
 
-#### Permission Issues
+#### Permission surprises
 
-If you encounter file-ownership surprises in a directory mounted into
-a containerized backend, remember mounts and UID mapping are
-configured in the compose setup, not by this wrapper. Check the
-mounted directory permissions:
+If you meet file-ownership surprises in a pouch stowed aboard a
+residence, remember that stowage and uid mapping are the yard's
+articles, not the Officer's. Check the pouch's permissions:
 ```bash
 ls -l /path/to/mounted/directory
 ```
 
-### Diagnostic Commands
+### Reading the smoke
 
-Use these commands to diagnose general issues:
+Where to look, in order:
 
-1. Check the middleware logs:
+1. The Officer's smoke:
 ```bash
 tail -f /tmp/lisply-mcp-wrapper.log
 ```
 
-2. Check backend container logs (for the compose stack):
+2. The ship's smoke (aboard ship):
 ```bash
 cd ~/projects/basilisk && ./basilisk logs
 ```
 
-3. Check Lisply service status:
+3. The hatch:
 ```bash
 curl http://localhost:9081/lisply/ping-lisp
 ```
 
-4. Verify Docker environment:
+4. The vat:
 ```bash
 docker system info
 ```
@@ -753,12 +737,12 @@ For applications that need to keep their source code closed, Genworks
 has begun offering an "escape clause" from AGPL restrictions for a 5%
 self-reported quarterly revenue royalty. More information and a
 payment gateway are available at
-[royalties.genworks.com](https://royalties.genworks.com).
+[genworks.com/royalties](https://genworks.com/royalties).
 
 The full text of the license can be found in the COPYING.txt file in
 this directory. 
 
-## MCP Server Registries
+## Where the Officer is listed
 
 - [MCPHub](https://mcphub.com/mcp-servers/gornskew/lisply-mcp)
 

@@ -8,7 +8,7 @@ programming, through protocols defined in this document.
 
 ## Core Requirements
 
-### 2. Some kind of Lisp
+### 1. Some kind of Lisp
 
 It should be a [Lisp](https://common-lisp.net/). What is a Lisp? Well
 for our purposes let's say a Lisp is a program which can accept
@@ -22,7 +22,7 @@ better time if the engine behind your
 [REPL](https://lisp-lang.org/learn/repl) is indeed a
 [Lisp](https://franz.com/products/allegro-common-lisp/).
 
-### 1. HTTP Server Capability
+### 2. HTTP Server Capability
 
 A Lisply backend must provide an HTTP server that exposes the
 following endpoints:
@@ -34,7 +34,7 @@ following endpoints:
 Note: The endpoint prefix (`/lisply/`) can be configured in the MCP
 wrapper, but backends should support this as the default.
 
-### 2. Lisp Evaluation Protocol
+### 3. Lisp Evaluation Protocol
 
 The backend must support Lisp code evaluation through the
 `/lisply/lisp-eval` endpoint with the following characteristics:
@@ -64,7 +64,7 @@ The backend must support Lisp code evaluation through the
   }
   ```
 
-### 3. Tool Definitions
+### 4. Tool Definitions
 
 The backend must expose a list of its capabilities through the
 `/lisply/tools/list` endpoint, which returns a JSON object with the
@@ -104,10 +104,10 @@ structure:
 ```
 
 **Note**: The backend is only expected to implement the `lisp_eval`
-and `ping_lisp` tools. The `http_request` tool and the `mode`
-parameter for `lisp_eval` are handled by the MCP wrapper middleware
+and `ping_lisp` tools. The `http_request`, `get_docs` and
+`get_docs_list` tools are handled by the MCP wrapper middleware
 (mcp-wrapper.js) and should not be implemented or documented by the
-backend. The backend is not aware of these features, as they are an
+backend. The backend is not aware of these tools, as they are an
 abstraction provided by the middleware.
 
 ## Optional Capabilities
@@ -122,59 +122,38 @@ For enhanced integration with development environments:
 - **Default Port**: 4200 (internal to container) / 4201 (visible on
   docker host)
 
-### 2. Interactive Debugger
+### 2. Communication
 
-For local deployments, provide interactive debugging capabilities:
+The middleware speaks to the backend over HTTP only: structured
+responses with separate result and stdout fields, as specified above.
+This is the one mode a backend implements.
 
-- Interactive REPL via stdio mode
-- Debugger interface with the ability to:
-  - Display debug information for errors
-  - Present multiple restart options
-  - Support for common debugging commands (abort, continue, backtrace, etc.)
-  - Return to normal evaluation upon command
-- Proper handling of debugger prompt detection (implementation-specific)
+An earlier optional "stdio mode", in which the middleware drove a
+backend's native REPL on standard input and output (with the
+interactive debugger and incremental output that gave), was removed
+together with the middleware's container management; a backend need
+not present a REPL on standard I/O for any Lisply purpose.
 
-### 3. Communication Modes
-
-The middleware supports two evaluation modes with the Lisply
-backend:
-
-- **HTTP Mode**: Structured communication with separate result and
-  stdout fields. The backend returns a JSON response with success,
-  result, and stdout fields. This is the standard mode of
-  communication and the only one the backend needs to implement
-  directly.
-
-- **Stdio Mode**: To support this (optional) mode, the backend must
-  present a Lisp REPL (read-eval-print-loop) as the foreground process
-  attached to its standard input/output. The communication for this
-  mode is managed by the middleware (mcp-wrapper.js), which expects a
-  native REPL interface on the standard input/output streams of the
-  local backend container. Implementing/configuring this standard I/O
-  behavior may be easier on some backends (e.g. Common Lisp, where a
-  repl on standard I/O is typically the default anyway, vs. Emacs
-  Lisp, where some tricks may be necessary to get something like
-  [IELM](https://www.emacswiki.org/emacs/InferiorEmacsLispMode) to
-  show up on standard I/O.
-
-
-### 4. HTTPS Support
+### 3. HTTPS Support
 
 For secure deployments:
 
 - HTTPS server with valid certificates
 - Default port: 9443 (internal to container) / 9444 (visible on docker host)
 
-### 5. Telnet Interface
+### 4. Telnet Interface
 
 For legacy access methods:
 
 - Telnet server for direct Lisp interaction
 - Default port: 4023 (internal to container) / 4024 (visible on docker host)
 
-## Containerization Support (optional in principle, but required for local operation of cyborg-whisperer)
+## Containerization Support (optional; the wrapper never starts containers)
 
-For standardized deployment, backends should support:
+A backend shipped as a container image should honor these conventions,
+so that a deployment tool such as the Basilisk yard can raise it beside
+the others.  The wrapper itself never pulls or starts a container; it
+calls on one that is already running:
 
 1. **Docker Container**: A Docker image containing the Lisply backend
 2. **Service Configuration**: Environment variables to configure service startup:
@@ -191,7 +170,9 @@ Currently, there are implementations or planned implementations for:
 
 1. **Gendl**: A full implementation available at [Gendl on GitLab](https://gitlab.common-lisp.net/gendl/gendl)
         with Lisply implementation [here](https://gitlab.common-lisp.net/gendl/gendl/gwl/lisply-backend)
-2. **GNU Emacs Backend**: In development at [Readymax on GitHub](https://github.com/gornskew/readymax.git)
+2. **GNU Emacs Backend**: the Readymax ready room's Captain, at
+   [github.com/gornskew/readymax](https://github.com/gornskew/readymax),
+   `dot-files/emacs.d/sideloaded/lisply-backend/`
 
 
 ## Testing for Compliance
@@ -210,10 +191,6 @@ To test a backend for compliance, implement the following checks:
    POST /lisply/lisp-eval
    {"code": "(package-name *package*)", "package": "gdl-user"}
    ```
-
-Note: Testing of the `mode` parameter should be done at the middleware
-level, not directly with the backend, as this feature is handled by
-the MCP wrapper and is expected to be ignored by the backend.
 
 A successful implementation should respond correctly to all these tests.
 

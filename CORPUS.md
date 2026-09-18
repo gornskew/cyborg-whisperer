@@ -6,14 +6,15 @@ Copyright © 2026 Gornskew Enterprises.  AGPL-3.0-or-later; see COPYING.txt.
 index rather than from the live image (BACKEND-REQS.md, "Design
 Guidance").  This document is the single source of truth for that
 index: what a **corpus file** is, how a **project** builds and ships
-one, and how a **console** that serves `lisply_search` finds and
+one, and how a **ready room** whose Captain serves `lisply_search`
+finds and
 merges the corpora aboard.  The reference indexer that produces the
 format lives beside this file, `scripts/lisply-index.js`.
 
 The principle (2026-09-14): **content lives with each project; the
 format lives with the protocol that promises it.**  Gendl's corpus is
 Gendl's to build and carry, in the image that carries Gendl, so it
-describes the Gendl actually aboard.  A console never fetches another
+describes the Gendl actually aboard.  A Captain never fetches another
 project's source; it reads the index files the deployment puts in
 front of it.  Only the index travels: it is self-contained -- snippets
 pre-extracted, terms pre-computed -- and needs no source at search
@@ -77,7 +78,7 @@ Rules that keep every producer's output interchangeable:
 - **Encoding**: the file is UTF-8, strings escaped only for `"` and
   `\`; a consumer decodes as UTF-8 without guessing.
 - **Names**: `:corpus` and every FILE's `:source` are the same name, a
-  short lowercase slug (`gendl`, `readymax`, `demos`).  A console keys
+  short lowercase slug (`gendl`, `readymax`, `demos`).  A Captain keys
   overrides on it (section 5).
 
 ## 2. The project's declaration: `lisply-corpus.sexp`
@@ -126,7 +127,7 @@ docker run --rm --entrypoint lisply-index --user "$(id -u):$(id -g)" \
   --root /corpus --out /out/gendl.sexp
 ```
 
-(`--entrypoint` matters: the image's own entrypoint starts the console
+(`--entrypoint` matters: the casting's own entrypoint wakes the Captain
 and ignores the command.  `--user` matters on a CI runner: the image's
 user is uid 1000, and the output directory is yours.  Images from
 before the evening of 2026-09-14 keep the script under the image
@@ -134,7 +135,7 @@ user's 0700 home only, so `--user` cannot reach it there; with those,
 drop `--user` and `chmod 777` the output directory for the run
 instead.)
 
-Other producers are welcome (the Readymax console has an Emacs Lisp
+Other producers are welcome (the Readymax Captain has an Emacs Lisp
 one for its own corpus); what makes them conforming is the file they
 write, section 1.
 
@@ -156,13 +157,13 @@ files out (`docker create` + `docker cp`), never starting the container
 and never needing the source.
 
 `:distribution :internal` marks a corpus that must never be baked into
-a publicly distributed image: a console building its own baked index
-skips internal sources; an internal corpus reaches a console only as a
+a publicly distributed casting: a Captain building his own baked index
+skips internal sources; an internal corpus reaches a ready room only as a
 file the deployment mounts.
 
 ## 5. Consuming: the corpora directory and the merge
 
-A console that serves `lisply_search` loads:
+A Captain who serves `lisply_search` loads:
 
 1. its own baked index (its own content, plus whatever public fallback
    it chose to bake, such as a Gendl corpus for standalone use), and
@@ -173,16 +174,16 @@ A console that serves `lisply_search` loads:
 
 The merge rule: **a corpus in the directory replaces a same-named
 source in the baked index** -- the Gendl aboard outranks the Gendl the
-console was built with.  Corpora in the directory do not override each
+Captain was cast with.  Corpora in the directory do not override each
 other.  The response's `sources` lists what is actually loaded, and
 `corpora` names each loaded file with its `:generated-at`, so a client
-can see what it is searching.  The console reloads when any file's
+can see what it is searching.  The Captain reloads when any file's
 modification time changes.
 
 ## 6. The search response
 
 The `lisply_search` tool's arguments and response are the backend's
-(`POST /lisply/lisply-search`); the Readymax console's
+(`POST /lisply/lisply-search`); the Readymax Captain's
 `dot-files/emacs.d/sideloaded/lisply-backend/CLAUDE.md` documents the
 current parameters (`query`, `k`, `sources`, `path_filters`,
 `match_mode`, `max_snippet_tokens`, ...) and the hit shape (`source`,
