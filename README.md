@@ -453,7 +453,7 @@ host and hatch he was given, and says so helpfully (with a hint to
 raise the ship) when nobody is home.
 
 For rooms raised from the vat (Gendl, Readymax and the rest), use the
-Basilisk yard, `gitlab.genworks.com:gornskew/basilisk` (`./basilisk
+Basilisk yard, `github.com/gornskew/basilisk` (`./basilisk
 up`), whose articles choose the castings, stow the pouches, open the
 hatches on the dock and map the uids. For a resident living on the
 dock, open the hatch yourself (the space-suit path in readymax
