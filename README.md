@@ -56,15 +56,6 @@ Lisply hatch of your own on the dock and point the Officer at it.
 Once a resident answers, Claude Desktop calls on him as the example
 registries below show.
 
-## Who Is this Meant For?
-
- - AI practitioners curious about Lisp
- - Lisp practitioners curious about AI
- - Anyone interested in Neuro-Symbolic Programming
- - Mechanical/Civil Engineers and Designers interested in CAD
-   Automation and Knowledge Based Engineering
- - Tinkerers, meddlers, and tamperers from all walks of life
-
 ## What Is it Meant to Do?
 
 The Officer connects the craft a cyborg arrives in — any
