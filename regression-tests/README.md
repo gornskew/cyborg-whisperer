@@ -39,6 +39,8 @@ against its own HTTP server.
 - Ping: `pong`
 - Arithmetic: `Result: 6, Stdout: ` for `(+ 1 2 3)`
 - Lists: `Result: (1 2 3), Stdout: ` for `(list 1 2 3)`
+- A backend that reports its package adds a suffix, e.g.
+  `Result: 6, Stdout: , Package: GDL-USER` (Gendl backends since 2026-09-23)
 - Errors: MCP error `-32603`
 
 ## History

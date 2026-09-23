@@ -52,9 +52,16 @@ The backend must support Lisp code evaluation through the
   {
     "success": true,
     "result": "Result of evaluation",
-    "stdout": "Any stdout output generated"
+    "stdout": "Any stdout output generated",
+    "package": "Optional: the package the code was read and evaluated in"
   }
   ```
+
+  `package` is optional.  When present, the wrapper appends it to the
+  tool's text result (`..., Package: GDL-USER`) the way a REPL prompt
+  shows where the user is, so an agent never needs an `in-package`
+  form.  A backend given a `package` it cannot find must answer with
+  `success: false` and an error, never evaluate in some other package.
   
   Or in case of error:
   ```json

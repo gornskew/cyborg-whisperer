@@ -67,7 +67,9 @@ function handleLispEvalViaHttp(request, args, config, logger) {
       if ('success' in result) {
         if (result.success) {
           logger.info(`Lisp eval success: ${result.result}`);
-          sendTextResponse(request, `Result: ${result.result}, Stdout: ${result.stdout}`, logger);
+          // a backend may name the package it evaluated in, as a REPL prompt does
+          const pkg = result.package ? `, Package: ${result.package}` : '';
+          sendTextResponse(request, `Result: ${result.result}, Stdout: ${result.stdout}${pkg}`, logger);
         } else {
           logger.error(`Lisp eval failed: ${result.error || 'Unknown error'}`);
           sendToolErrorResponse(request, `Error: ${result.error || 'Unknown error'}${result.stdout ? `, Stdout: ${result.stdout}` : ''}`, logger);
