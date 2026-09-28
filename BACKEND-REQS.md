@@ -229,11 +229,15 @@ describing the error.
 
 Backends that do not implement `/lisply/tools/call` simply never
 advertise extra tools; the wrapper's native set continues to work
-unchanged. Example: Gendl/Genworks-GDL backends advertise a
+unchanged. Examples: Gendl/Genworks-GDL backends advertise a
 `render_png` tool (see gendl: gwl/lisply-backend and
 gwl-graphics/gwl/source/lisply-render-tool.lisp) which renders
 geometry via the standalone drawing system and returns MCP image
-content.
+content, and a `describe_object` tool
+(gwl/lisply-backend/source/describe-tool.lisp) which answers what an
+object type takes -- its inputs with their documentation strings, its
+documented computed slots, children and functions -- read from the
+type's message list without evaluating anything, a text block.
 
 ### Design Guidance: When to Add a Tool (and When Not To)
 
