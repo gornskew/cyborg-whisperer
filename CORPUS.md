@@ -94,7 +94,7 @@ is optional but `:name`:
   :subdirs ("geom-base" "gwl")   ; index only these directories (default: all)
   :ignore-dirs (".git" "node_modules" "dist" "build" "vendor" "target" ".cache" "logs" "tmp" "docker")
   :exclude-paths ("**/*.min.js" "**/*.min.css" "**/3rdpty/**" "**/static/plugins/**")
-  :extensions (".lisp" ".lsp" ".cl" ".gdl" ".gendl" ".asd" ".isc"
+  :extensions (".lisp" ".lsp" ".cl" ".gdl" ".gendl" ".asd" ".sexp" ".isc"
                ".md" ".markdown" ".org" ".txt" ".rst"
                ".el" ".js" ".ts" ".json" ".yml" ".yaml" ".html" ".css")
   :max-lines 24
