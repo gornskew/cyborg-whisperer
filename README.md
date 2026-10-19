@@ -335,6 +335,15 @@ practice, plainly:
 
 - Consider [limiting the RAM and CPU](https://docs.docker.com/engine/containers/resource_constraints/)
   of the container.
+
+- Let the resident ask for a secret, and give the Officer the same one:
+  a Gendl backend requires `X-Lisply-Secret` once one is configured
+  (gendl's `gwl/lisply-backend` README, "Securing the Endpoints"), and
+  `--admin-secret-file <path> --admin-secret-header X-Lisply-Secret`
+  sends it on every call, the first availability check included,
+  without the secret ever appearing on a command line.  A resident
+  whose port anyone else can reach must never go without one, and no
+  public proxy should route `/lisply` to it.
   
 
 ### The scrolls in this chest
@@ -403,6 +412,11 @@ Options:
   --server-name <name>                 MCP server name for tool prefixing (default: lisply-mcp)
   --eval-timeout <ms>                  Timeout for Lisp evaluation in milliseconds (default: 30000)
   --request-timeout-ms <ms>            Timeout for backend HTTP requests in milliseconds (default: 10000)
+  --admin-secret <secret>              Secret sent as a header on every backend request
+  --admin-secret-header <name>         That header's name (default: X-Cyclops-Admin-Secret;
+                                       a Gendl backend wants X-Lisply-Secret)
+  --admin-secret-file <path>           Read the secret from this file's first line instead (kept
+                                       out of argv; read again whenever the file changes)
   -h, --help                           Display help for command
 ```
 
@@ -433,6 +447,9 @@ inside the residence (what the resident himself sees):
 | `SERVER_NAME` or `LISPLY_SERVER_NAME` | MCP server name for tool prefixing | lisply-mcp |
 | `TRUST_AS_SANDBOX` or `LISPLY_TRUST_AS_SANDBOX` | Advertise backend as an explicitly trusted sandbox in tool metadata | true |
 | `SANDBOX_NOTE` or `LISPLY_SANDBOX_NOTE` | Override the sandbox-note text shown in tool metadata | (built-in note) |
+| `ADMIN_SECRET` or `LISPLY_ADMIN_SECRET` | Secret sent as a header on every backend request | (none) |
+| `ADMIN_SECRET_HEADER` or `LISPLY_ADMIN_SECRET_HEADER` | That header's name | X-Cyclops-Admin-Secret |
+| `ADMIN_SECRET_FILE` or `LISPLY_ADMIN_SECRET_FILE` | File whose first line is the secret (re-read when it changes) | (none) |
 
 ## Raising rooms is the vat's business, not the Officer's
 

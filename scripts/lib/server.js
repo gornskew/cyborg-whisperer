@@ -28,6 +28,7 @@
  *   req.destroy() after timeout also emitted 'error').
  */
 
+const fs = require('fs');
 const http = require('http');
 const readline = require('readline');
 
@@ -41,6 +42,27 @@ let backendAgent = createBackendAgent();
  *  Set once from config in startMcpWrapper; null means "no header". */
 let adminHeaderName = null;
 let adminSecret = null;
+/** Or a file whose first line is the secret, re-read when its mtime
+ *  changes (config ADMIN_SECRET_FILE); it wins over adminSecret. */
+let adminSecretFile = null;
+let adminSecretCache = { mtimeMs: null, value: null };
+
+/** The admin secret to send now, or null for none. */
+function currentAdminSecret() {
+  if (!adminSecretFile) return adminSecret;
+  try {
+    const st = fs.statSync(adminSecretFile);
+    if (st.mtimeMs !== adminSecretCache.mtimeMs) {
+      const first = fs.readFileSync(adminSecretFile, 'utf8').split(/\r?\n/)[0].trim();
+      adminSecretCache = { mtimeMs: st.mtimeMs, value: first || null };
+    }
+    return adminSecretCache.value;
+  } catch (e) {
+    // unreadable: send what we have, if anything; a backend that wants a
+    // secret refuses the request and the caller sees why
+    return adminSecret;
+  }
+}
 
 function createBackendAgent() {
   return new http.Agent({ keepAlive: true, maxSockets: 8 });
@@ -89,6 +111,11 @@ function checkBackendAvailability(config, logger) {
       method: 'GET',
       timeout: 5000
     };
+    // the admin header too: a backend that requires it answers 403 without
+    const secretNow = currentAdminSecret();
+    if (secretNow && adminHeaderName) {
+      options.headers = { [adminHeaderName]: secretNow };
+    }
 
     const req = http.request(options, (res) => {
       let body = '';
@@ -150,9 +177,10 @@ function makeHttpRequest(options, body, callback, logPrefix, logger) {
   // Inject the admin auth header (e.g. for a gated Cyclops) on every
   // backend request, including redirect hand-offs, without each handler
   // needing to know about it.
-  if (adminSecret) {
+  const secretNow = currentAdminSecret();
+  if (secretNow) {
     options = { ...options,
-                headers: { ...(options.headers || {}), [adminHeaderName]: adminSecret } };
+                headers: { ...(options.headers || {}), [adminHeaderName]: secretNow } };
   }
   const req = http.request({ ...options, agent: backendAgent, timeout: timeoutMs }, (res) => {
     let data = '';
@@ -217,16 +245,31 @@ function makeHttpRequest(options, body, callback, logPrefix, logger) {
 }
 
 /**
+ * Set the admin auth header every backend request carries.  Called
+ * before the startup availability check: a backend that requires the
+ * secret answers that check 403 without it, and the wrapper would exit.
+ * Idempotent.
+ */
+let adminAuthLogged = false;
+function configureAdminAuth(config, logger) {
+  if (config.ADMIN_SECRET || config.ADMIN_SECRET_FILE) {
+    adminHeaderName = config.ADMIN_SECRET_HEADER;
+    adminSecret = config.ADMIN_SECRET || null;
+    adminSecretFile = config.ADMIN_SECRET_FILE || null;
+    if (!adminAuthLogged) {
+      adminAuthLogged = true;
+      logger.info(`Admin auth header enabled: ${adminHeaderName} (value hidden${adminSecretFile ? ', from ' + adminSecretFile : ''})`);
+    }
+  }
+}
+
+/**
  * Start MCP wrapper - stdio JSON-RPC server
  */
 function startMcpWrapper(config, logger, handlers) {
   logger.info('Starting MCP stdio server');
 
-  if (config.ADMIN_SECRET) {
-    adminHeaderName = config.ADMIN_SECRET_HEADER;
-    adminSecret = config.ADMIN_SECRET;
-    logger.info(`Admin auth header enabled: ${adminHeaderName} (value hidden)`);
-  }
+  configureAdminAuth(config, logger);
 
   process.stdin.setEncoding('utf8');
 
@@ -289,6 +332,7 @@ function startMcpWrapper(config, logger, handlers) {
 }
 
 module.exports = {
+  configureAdminAuth,
   getBackendConnectionInfo,
   checkBackendAvailability,
   makeHttpRequest,

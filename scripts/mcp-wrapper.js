@@ -38,7 +38,7 @@ ensureDependencies();
 const { program } = require('commander');
 const { createLogger } = require('./lib/logger');
 const { loadConfig } = require('./lib/config');
-const { checkBackendAvailability, startMcpWrapper } = require('./lib/server');
+const { configureAdminAuth, checkBackendAvailability, startMcpWrapper } = require('./lib/server');
 const handlers = require('./handlers');
 
 // Parse command line arguments
@@ -59,6 +59,7 @@ program
     .option('--request-timeout-ms <ms>', 'Timeout for backend HTTP requests in milliseconds (default: 10000)')
     .option('--admin-secret <secret>', 'Secret sent as an admin auth header on every backend request (e.g. a gated Cyclops); overridable via LISPLY_ADMIN_SECRET / ADMIN_SECRET env')
     .option('--admin-secret-header <name>', 'Header name for --admin-secret (default: X-Cyclops-Admin-Secret)')
+    .option('--admin-secret-file <path>', 'Read the admin secret from the first line of this file instead (re-read when it changes; keeps it out of argv); overridable via LISPLY_ADMIN_SECRET_FILE / ADMIN_SECRET_FILE env')
     .parse(process.argv);
 
 // Load configuration
@@ -74,6 +75,10 @@ logger.info('='.repeat(60));
 logger.info(`Server name: ${config.SERVER_NAME}`);
 logger.info(`Backend: ${config.BACKEND_HOST}:${config.HTTP_HOST_PORT} (host) / :${config.HTTP_PORT} (container)`);
 logger.info(`Endpoints: ${config.EVAL_ENDPOINT}, ${config.HTTP_REQUEST_ENDPOINT}, ${config.PING_ENDPOINT}`);
+
+// The admin header first: the availability check below must carry it
+// (a backend that requires it answers the check 403 otherwise)
+configureAdminAuth(config, logger);
 
 // Main: check backend availability and start MCP server
 checkBackendAvailability(config, logger)

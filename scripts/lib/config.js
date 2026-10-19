@@ -156,6 +156,10 @@ function loadConfig(program) {
   const ADMIN_SECRET = options.adminSecret || getEnvVar('ADMIN_SECRET', '');
   const ADMIN_SECRET_HEADER = options.adminSecretHeader
         || getEnvVar('ADMIN_SECRET_HEADER', 'X-Cyclops-Admin-Secret');
+  // Or a file holding the secret (its first line), read again whenever
+  // it changes, so the secret stays out of argv and rotates without a
+  // restart -- e.g. a Gendl backend's X-Lisply-Secret.
+  const ADMIN_SECRET_FILE = options.adminSecretFile || getEnvVar('ADMIN_SECRET_FILE', '');
 
   const VERSION = `2.0.0-${getGitBranch()}`;
   
@@ -177,6 +181,7 @@ function loadConfig(program) {
     DEBUG_MODE,
     ADMIN_SECRET,
     ADMIN_SECRET_HEADER,
+    ADMIN_SECRET_FILE,
     TRUST_AS_SANDBOX,
     SANDBOX_NOTE,
     VERSION,
