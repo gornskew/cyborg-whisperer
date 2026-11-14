@@ -35,6 +35,10 @@ did not change.
   project; the format lives here, with the protocol that promises
   the tool.
 - `regression-tests/harness.js` — stdio JSON-RPC regression harness
+- `regression-tests/lisply-index-embed.js` — the indexer's embeddings
+  companion (CORPUS.md section 7) against a mock embedding server; run
+  it after touching `lisply-index.js`.  Companions are built only for
+  `:public` corpora: search results reach cloud AI clients.
 - `attic/` — the retired container-management subsystem, history only
 
 ## Working on it

@@ -190,7 +190,89 @@ current parameters (`query`, `k`, `sources`, `path_filters`,
 `repo`, `path`, `start_line`, `end_line`, `match_line`, `snippet`,
 `preview`).  Two fields matter to the corpus contract: hits carry the
 corpus name in `source`, and `path` is relative to the corpus file's
-`:repo-root`.
+`:repo-root`.  `search_mode` (`lexical`, `semantic`, `hybrid`) picks
+the ranking; the response's `search_mode` is the one actually used, and
+semantic and hybrid need the companion of section 7.
+
+## 7. The embeddings companion (optional)
+
+A corpus may carry an **embeddings companion**: one vector per snippet,
+made by an embedding model, so that a Captain can rank snippets by
+meaning (`search_mode` `semantic`) or fuse that ranking with the
+lexical one (`hybrid`).  It is optional and never required: a Captain
+without it, or without an embedding server to embed the query, answers
+lexically as before.  The corpus format stays version 4.
+
+**Where.**  In an `embeddings/` subdirectory of the corpora directory,
+named by the corpus: `<corpora>/embeddings/<corpus>.emb.sexp` (the
+header) and `<corpus>.i8` (the vectors).  Not beside the corpora
+themselves, where every `*.sexp` is loaded as a corpus.
+
+**The header**, an s-expression like the corpus file:
+
+```lisp
+(:version 1                              ; the companion format
+ :corpus "gendl"
+ :corpus-checksum "994-6641869"          ; the corpus's :checksum ...
+ :corpus-generated-at "2026-11-13T20:10:25Z"   ; ... and :generated-at
+ :model "Qwen3-Embedding-0.6B-Q8_0"       ; what the server called it
+ :dims 1024 :rows 9397
+ :dtype :int8 :scale 578.850263          ; stored value = round(v * scale)
+ :normalized t                           ; v is L2-normalized first
+ :document-text "relpath, newline, snippet"
+ :query-prefix "Instruct: ...\nQuery: "  ; prepended to every query, verbatim
+ :built-at "2026-11-14T22:29:13Z"
+ :generator "lisply-index 1")
+```
+
+**The vectors**: `rows x dims` signed bytes, row-major, no header.  Row
+*i* is the *i*-th snippet in corpus order -- `:files` in order, each
+file's `:snippets` in order -- so a vector hit maps to the same `path`
+and line range a lexical hit reports.  Each snippet is embedded as its
+path relative to `:repo-root`, a newline, and its text; each vector is
+L2-normalized and then scaled by ONE factor for the whole corpus (127
+over its largest component) and rounded.  Measured on a 9,397-snippet
+Gendl corpus at 1024 dimensions, this int8 form keeps recall@10 at 0.995
+against the float vectors, at a quarter of the size, and lets a Captain
+score in integer arithmetic.
+
+**When a Captain uses it.**  Only when it was built from the very corpus
+loaded: `:corpus-checksum` and `:corpus-generated-at` equal the corpus's
+`:checksum` and `:generated-at`, `:rows` equals its snippet count, and
+the vector file is `rows x dims` bytes.  Otherwise it is stale and
+ignored, and the response's `corpora` says so (`embeddings`).  The query
+is embedded by the same model, behind `:query-prefix` (instruction-tuned
+models want one; it is whatever the builder was told), through an
+OpenAI-style `/v1/embeddings` endpoint the deployment names
+(`LISPLY_EMBED_URL`; a bearer key in the file `LISPLY_EMBED_KEY_FILE`).
+
+**Building one**: the reference indexer, against such an endpoint:
+
+```bash
+# build a corpus and its companion
+node scripts/lisply-index.js --root /path/to/checkout --out corpora/gendl.sexp \
+  --embed --embed-instruction "Given a question about Gendl, retrieve the code or documentation that answers it"
+# a companion for a corpus already built (one copied out of an image)
+node scripts/lisply-index.js --embed-corpus corpora/gendl.sexp --embed-instruction "..."
+```
+
+The server and key file come from `--embed-url` and `--embed-key-file`,
+or from `LISPLY_EMBED_URL` and `LISPLY_EMBED_KEY_FILE`.  A companion
+that is already current is left alone (`--force` rebuilds it).
+`regression-tests/lisply-index-embed.js` checks the format against a
+mock server.
+
+**Only what may go to cloud AI is embedded.**  `lisply_search` answers
+AI clients, and the companion is made from the corpus text, which goes
+to the embedding server to be embedded.  So build companions only for
+corpora that may already be shown to a cloud-hosted model: the
+reference indexer refuses a corpus that is not `:distribution :public`
+(exit 3, nothing sent).  A producer that builds a corpus from records
+rather than a source tree -- an archive of sessions, say -- keeps the
+same rule in its own code: public fields only, never addresses,
+credentials, payment identifiers, uploads, transcripts or anything
+marked private.  An `:internal` corpus gets a companion only by a
+deliberate change to that rule, never by a flag.
 
 ## Versioning
 

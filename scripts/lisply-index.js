@@ -282,6 +282,153 @@ function fileSnippets(file, maxLines, maxChars) {
 }
 
 // ------------------------------------------------------------------
+// Embeddings companion (CORPUS.md section 7): one int8 vector per
+// snippet, in corpus row order, from an OpenAI-style embedding server.
+// ------------------------------------------------------------------
+
+const COMPANION_VERSION = 1;
+const EMBED_BATCH = 32;
+
+function corpusRows(corpus) {
+  // Row order: :files in order, each file's :snippets in order.
+  const rows = [];
+  const files = pget(corpus, 'files') || [];
+  for (const f of files) {
+    const repoRoot = pget(f, 'repo-root');
+    const file = pget(f, 'path') || '';
+    const rel = repoRoot ? path.posix.relative(repoRoot, file) : file;
+    for (const s of pget(f, 'snippets') || []) {
+      rows.push(`${rel}\n${pget(s, 'snippet') || ''}`);
+    }
+  }
+  return rows;
+}
+
+function companionPaths(dir, name) {
+  return { header: path.join(dir, `${name}.emb.sexp`), blob: path.join(dir, `${name}.i8`) };
+}
+
+function readCompanionHeader(file) {
+  try { return readSexp(fs.readFileSync(file, 'utf8')); } catch (e) { return null; }
+}
+
+async function embedBatch(url, key, model, texts) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (key) headers.Authorization = `Bearer ${key}`;
+  const res = await fetch(url, {
+    method: 'POST', headers,
+    body: JSON.stringify({ model: model || '', input: texts }),
+    signal: AbortSignal.timeout(120000),
+  });
+  if (!res.ok) throw new Error(`embedding server answered HTTP ${res.status}`);
+  const json = await res.json();
+  const data = (json.data || []).slice().sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+  if (data.length !== texts.length) throw new Error(`asked for ${texts.length} vectors, got ${data.length}`);
+  return { vectors: data.map((d) => d.embedding), model: json.model };
+}
+
+/**
+ * Write the embeddings companion of the corpus in CORPUSFILE into OUTDIR
+ * (default: an `embeddings' directory beside it).  Refuses a corpus that
+ * is not :public: its text goes to the embedding server, and its search
+ * results to AI clients.  Skips a companion that is already current
+ * unless FORCE.
+ */
+async function embedCorpusFile(corpusFile, opts) {
+  const log = opts.log || (() => {});
+  const corpus = readSexp(fs.readFileSync(corpusFile, 'utf8'));
+  const name = pget(corpus, 'corpus');
+  const distribution = kwName(pget(corpus, 'distribution')) || DEFAULTS.distribution;
+  if (!name) throw new Error(`${corpusFile}: no :corpus name`);
+  if (distribution !== 'public') {
+    const e = new Error(`${corpusFile}: corpus ${name} is :${distribution}; an embeddings companion is built only for a :public corpus (CORPUS.md section 7)`);
+    e.exitCode = 3;
+    throw e;
+  }
+  if (!opts.url) throw new Error('no embedding server (--embed-url or LISPLY_EMBED_URL)');
+  const outDir = opts.outDir || path.join(path.dirname(path.resolve(corpusFile)), 'embeddings');
+  const out = companionPaths(outDir, name);
+  const checksum = pget(corpus, 'checksum');
+  const generatedAt = pget(corpus, 'generated-at');
+  const old = fs.existsSync(out.header) ? readCompanionHeader(out.header) : null;
+  if (!opts.force && old && fs.existsSync(out.blob)
+      && pget(old, 'corpus-checksum') === checksum
+      && pget(old, 'corpus-generated-at') === generatedAt
+      && (!opts.model || pget(old, 'model') === opts.model)
+      && pget(old, 'query-prefix') === opts.queryPrefix) {
+    log(`Embeddings current: ${out.header}`);
+    return { skipped: true, name };
+  }
+
+  const texts = corpusRows(corpus);
+  if (!texts.length) throw new Error(`${corpusFile}: no snippets to embed`);
+  const key = opts.keyFile ? fs.readFileSync(opts.keyFile, 'utf8').trim() : null;
+  const batch = Math.max(1, Number(opts.batch) || EMBED_BATCH);
+  const started = Date.now();
+  let dims = 0, model = opts.model, floats = null;
+  for (let i = 0; i < texts.length; i += batch) {
+    const { vectors, model: served } = await embedBatch(opts.url, key, opts.model, texts.slice(i, i + batch));
+    if (!model && served) model = served;
+    for (let r = 0; r < vectors.length; r++) {
+      const v = vectors[r];
+      if (!dims) { dims = v.length; floats = new Float32Array(texts.length * dims); }
+      if (v.length !== dims) throw new Error(`vector of ${v.length} dimensions after ${dims}`);
+      let norm = 0;
+      for (const x of v) norm += x * x;
+      norm = Math.sqrt(norm) || 1;
+      const base = (i + r) * dims;
+      for (let j = 0; j < dims; j++) floats[base + j] = v[j] / norm;
+    }
+    if (!opts.quiet && (i / batch) % 20 === 0) log(`${name}: ${Math.min(i + batch, texts.length)} of ${texts.length}`);
+  }
+
+  // One scale for the corpus: the largest component maps to 127.
+  let max = 0;
+  for (const x of floats) { const a = Math.abs(x); if (a > max) max = a; }
+  const scale = 127 / (max || 1);
+  const ints = new Int8Array(floats.length);
+  for (let k = 0; k < floats.length; k++) ints[k] = Math.max(-127, Math.min(127, Math.round(floats[k] * scale)));
+
+  fs.mkdirSync(outDir, { recursive: true });
+  // The vectors first: a header beside vectors of another build would
+  // describe them wrongly, and the consumer checks the size.
+  fs.writeFileSync(out.blob + '.tmp', Buffer.from(ints.buffer));
+  fs.renameSync(out.blob + '.tmp', out.blob);
+  const header = `;;; Lisply embeddings companion for corpus "${name}" (CORPUS.md section 7)\n` + sxList([
+    ':version', String(COMPANION_VERSION),
+    ':corpus', sxString(name),
+    ':corpus-checksum', sxString(String(checksum)),
+    ':corpus-generated-at', sxString(String(generatedAt)),
+    ':model', sxString(model || ''),
+    ':dims', String(dims), ':rows', String(texts.length),
+    ':dtype', ':int8', ':scale', scale.toFixed(6), ':normalized', 't',
+    ':document-text', sxString('relpath, newline, snippet'),
+    ':query-prefix', sxString(opts.queryPrefix),
+    ':built-at', sxString(new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')),
+    ':generator', sxString(GENERATOR)]) + '\n';
+  fs.writeFileSync(out.header, header, 'utf8');
+  log(`Embeddings written: ${out.header} (${texts.length} rows x ${dims}, ${((Date.now() - started) / 1000).toFixed(1)} s)`);
+  return { skipped: false, name, rows: texts.length, dims };
+}
+
+function embedOptions(args, log) {
+  const prefix = args['embed-query-prefix'] !== undefined
+    ? args['embed-query-prefix']
+    : (args['embed-instruction'] ? `Instruct: ${args['embed-instruction']}\nQuery: ` : '');
+  return {
+    url: args['embed-url'] || process.env.LISPLY_EMBED_URL,
+    keyFile: args['embed-key-file'] || process.env.LISPLY_EMBED_KEY_FILE,
+    model: args['embed-model'],
+    queryPrefix: prefix,
+    batch: args['embed-batch'],
+    outDir: args['embed-out'],
+    force: args.force,
+    quiet: args.quiet,
+    log,
+  };
+}
+
+// ------------------------------------------------------------------
 // Main
 // ------------------------------------------------------------------
 
@@ -291,6 +438,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === '--quiet' || a === '-q') { args.quiet = true; continue; }
     if (a === '--help' || a === '-h') { args.help = true; continue; }
+    if (a === '--embed' || a === '--force') { args[a.slice(2)] = true; continue; }
     if (a.startsWith('--')) { args[a.slice(2)] = argv[++i]; }
   }
   return args;
@@ -299,12 +447,21 @@ function parseArgs(argv) {
 function usage() {
   console.error(`usage: lisply-index --root DIR --out FILE [--config FILE] [--name NAME]
        [--distribution public|internal] [--subdirs a,b] [--repo NAME] [--repo-root DIR]
-       [--max-lines N] [--max-chars N] [--quiet]
-Reads DIR/lisply-corpus.sexp when present; flags override it.  See CORPUS.md.`);
+       [--max-lines N] [--max-chars N] [--quiet] [--embed EMBED-OPTIONS]
+       lisply-index --embed-corpus CORPUS-FILE [EMBED-OPTIONS]
+EMBED-OPTIONS: [--embed-url URL] [--embed-key-file FILE] [--embed-model NAME]
+       [--embed-instruction TEXT | --embed-query-prefix TEXT] [--embed-batch N]
+       [--embed-out DIR] [--force]
+Reads DIR/lisply-corpus.sexp when present; flags override it.  --embed, or
+--embed-corpus for a corpus already built, writes its embeddings companion
+(CORPUS.md section 7) beside it in embeddings/, for a :public corpus only;
+the server and key file default to LISPLY_EMBED_URL and LISPLY_EMBED_KEY_FILE.`);
 }
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
+  const log = (m) => { if (!args.quiet) console.error('[lisply-index] ' + m); };
+  if (args['embed-corpus'] && !args.help) return embedCorpusFile(args['embed-corpus'], embedOptions(args, log));
   if (args.help || !args.root || !args.out) { usage(); process.exit(args.help ? 0 : 2); }
   const root = path.resolve(args.root);
   const configFile = args.config || path.join(root, 'lisply-corpus.sexp');
@@ -325,7 +482,6 @@ function main() {
   const maxChars = Number(args['max-chars'] || pget(decl, 'max-chars') || DEFAULTS['max-chars']);
   const repo = args.repo || name;
   const repoRoot = path.resolve(args['repo-root'] || root);
-  const log = (m) => { if (!args.quiet) console.error('[lisply-index] ' + m); };
 
   const roots = subdirs.length ? subdirs.map((d) => path.join(root, d)) : [root];
   const files = [];
@@ -383,8 +539,15 @@ function main() {
   fs.mkdirSync(path.dirname(path.resolve(args.out)), { recursive: true });
   fs.writeFileSync(args.out, out, 'utf8');
   log(`Corpus written: ${args.out} (${name}, ${distribution}; ${files.length} files, ${snippetCount} snippets)`);
+  if (args.embed) return embedCorpusFile(args.out, embedOptions(args, log));
+  return undefined;
 }
 
-if (require.main === module) main();
+if (require.main === module) {
+  Promise.resolve().then(main).catch((e) => {
+    console.error(`lisply-index: ${e.message}`);
+    process.exit(e.exitCode || 1);
+  });
+}
 
-module.exports = { readSexp, pget, extractSnippets, fixedWindows, chunkBoundaries, extractTerms, capText, globToRegexp, listFiles };
+module.exports = { readSexp, pget, extractSnippets, fixedWindows, chunkBoundaries, extractTerms, capText, globToRegexp, listFiles, corpusRows, embedCorpusFile };
