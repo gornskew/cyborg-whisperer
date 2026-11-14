@@ -32,6 +32,7 @@ const INDEXER = path.join(__dirname, '..', 'scripts', 'lisply-index.js');
 const DIMS = 8;
 let requests = 0;
 let sawKey = null;
+let sawAgent = null;
 let sawInputs = [];
 
 // The mock: each text's vector is a deterministic function of its length,
@@ -49,6 +50,7 @@ const server = http.createServer((req, res) => {
   req.on('end', () => {
     requests++;
     sawKey = req.headers.authorization || null;
+    sawAgent = req.headers['user-agent'] || null;
     const { input } = JSON.parse(body);
     sawInputs.push(...input);
     res.setHeader('Content-Type', 'application/json');
@@ -105,6 +107,7 @@ server.listen(0, '127.0.0.1', async () => {
           rows === sawInputs.length && blob.length === rows * DIMS && rows >= 2);
     check('batched (--embed-batch 2)', requests === Math.ceil(rows / 2));
     check('bearer key from the key file, trimmed', sawKey === 'Bearer sekrit');
+    check('User-Agent names the indexer', sawAgent === 'lisply-index');
     check('documents are relpath, newline, snippet', sawInputs[0].startsWith('a.lisp\n(defun a'));
     // Row i is the i-th text: its largest component sits where the mock put it.
     const ints = new Int8Array(blob.buffer, blob.byteOffset, blob.length);

@@ -313,7 +313,9 @@ function readCompanionHeader(file) {
 }
 
 async function embedBatch(url, key, model, texts) {
-  const headers = { 'Content-Type': 'application/json' };
+  // A recognisable client, so the server's operator can tell a build's
+  // batches from other load in the server's log.
+  const headers = { 'Content-Type': 'application/json', 'User-Agent': 'lisply-index' };
   if (key) headers.Authorization = `Bearer ${key}`;
   const res = await fetch(url, {
     method: 'POST', headers,
