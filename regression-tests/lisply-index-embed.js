@@ -26,7 +26,7 @@ const os = require('os');
 const path = require('path');
 const http = require('http');
 const { execFile } = require('child_process');
-const { readSexp, pget } = require('../scripts/lisply-index');
+const { readSexp, pget, corpusRows, contentDigest, rowDigests } = require('../scripts/lisply-index');
 
 const INDEXER = path.join(__dirname, '..', 'scripts', 'lisply-index.js');
 const DIMS = 8;
@@ -39,6 +39,9 @@ let sawInputs = [];
 // so the test can say which row is which.
 function vectorFor(text) {
   const v = new Array(DIMS).fill(0);
+  // A one-hot vector is larger, normalized, than the others: a corpus
+  // gaining one must be rescaled as a whole.
+  if (text.includes('SPIKE')) { v[text.length % DIMS] = 1; return v; }
   v[text.length % DIMS] = 3;
   v[(text.length + 1) % DIMS] = -1;
   return v;
@@ -124,6 +127,66 @@ server.listen(0, '127.0.0.1', async () => {
     check('--embed-corpus on a current companion asks nothing', r.status === 0 && requests === before);
     r = await run(['--embed-corpus', out, '--embed-url', url, '--embed-instruction', 'Find code', '--quiet', '--force']);
     check('--force rebuilds it', r.status === 0 && requests > before);
+
+    // 2b. Identity by content, and incremental rebuilds (CORPUS.md section 7).
+    const emb = (ext) => path.join(dir, 'corpora', 'embeddings', `fixture.${ext}`);
+    const readHeader = () => readSexp(fs.readFileSync(emb('emb.sexp'), 'utf8'));
+    let texts = corpusRows(readSexp(fs.readFileSync(out, 'utf8')));
+    check('the header carries the digest of the embedded text, and one 8-byte digest per row',
+          pget(readHeader(), 'content-sha256') === contentDigest(texts)
+          && fs.statSync(emb('rows')).size === texts.length * 8);
+    await new Promise((res) => setTimeout(res, 1100));   // a new :generated-at
+    r = await run(['--root', src, '--name', 'fixture', '--out', out, '--quiet']);
+    let asked = requests;
+    r = await run(['--embed-corpus', out, '--embed-url', url, '--embed-instruction', 'Find code', '--quiet']);
+    check('a corpus rebuilt with the same text asks nothing and is re-stamped',
+          r.status === 0 && requests === asked
+          && pget(readHeader(), 'corpus-generated-at') === pget(readSexp(fs.readFileSync(out, 'utf8')), 'generated-at'));
+    fs.appendFileSync(path.join(src, 'notes.md'), '# Two\nmore text here\n');
+    r = await run(['--root', src, '--name', 'fixture', '--out', out, '--quiet']);
+    const newTexts = corpusRows(readSexp(fs.readFileSync(out, 'utf8')));
+    const known = new Set(texts);
+    const expected = newTexts.filter((t) => !known.has(t));
+    const inputsBefore = sawInputs.length;
+    r = await run(['--embed-corpus', out, '--embed-url', url, '--embed-instruction', 'Find code', '--quiet']);
+    const sentNow = sawInputs.slice(inputsBefore);
+    check('a changed corpus embeds only its new rows',
+          r.status === 0 && expected.length > 0 && expected.length < newTexts.length
+          && sentNow.length === expected.length && sentNow.every((t) => expected.includes(t)));
+    const blob2 = fs.readFileSync(emb('i8'));
+    const ints2 = new Int8Array(blob2.buffer, blob2.byteOffset, blob2.length);
+    check('kept and new rows both sit at their rows, at full scale',
+          blob2.length === newTexts.length * DIMS
+          && newTexts.every((t, i) => {
+            const row = Array.from(ints2.slice(i * DIMS, (i + 1) * DIMS));
+            return row.indexOf(Math.max(...row)) === t.length % DIMS && Math.max(...row) === 127;
+          }));
+    check('its digests follow the new text', pget(readHeader(), 'content-sha256') === contentDigest(newTexts)
+          && fs.readFileSync(emb('rows')).equals(rowDigests(newTexts)));
+    // A companion from before digests, still current by checksum and
+    // generated-at, gains them with no server at all.
+    const oldStyle = fs.readFileSync(emb('emb.sexp'), 'utf8')
+      .replace(/ :content-sha256 "[0-9a-f]+"/, '').replace(/ :row-digests :sha256-8/, '');
+    fs.writeFileSync(emb('emb.sexp'), oldStyle);
+    fs.rmSync(emb('rows'));
+    asked = requests;
+    r = await run(['--embed-corpus', out, '--embed-instruction', 'Find code', '--quiet']);
+    check('an old companion gains its digests without embedding, and without a server',
+          r.status === 0 && requests === asked && pget(readHeader(), 'content-sha256') === contentDigest(newTexts)
+          && fs.existsSync(emb('rows')));
+    texts = newTexts;
+    fs.appendFileSync(path.join(src, 'notes.md'), '# SPIKE\nlarge\n');
+    r = await run(['--root', src, '--name', 'fixture', '--out', out, '--quiet']);
+    r = await run(['--embed-corpus', out, '--embed-url', url, '--embed-instruction', 'Find code', '--quiet']);
+    const spiked = corpusRows(readSexp(fs.readFileSync(out, 'utf8')));
+    const blob3 = fs.readFileSync(emb('i8'));
+    const ints3 = new Int8Array(blob3.buffer, blob3.byteOffset, blob3.length);
+    const peak = (i) => Math.max(...Array.from(ints3.slice(i * DIMS, (i + 1) * DIMS)));
+    check('a row too large for the old scale rescales the corpus: it peaks at 127, kept rows below',
+          r.status === 0 && spiked.every((t, i) => {
+            const row = Array.from(ints3.slice(i * DIMS, (i + 1) * DIMS));
+            return row.indexOf(peak(i)) === t.length % DIMS && (t.includes('SPIKE') ? peak(i) === 127 : peak(i) === 120);
+          }));
 
     // 3. An :internal corpus is refused, and nothing is sent.
     const internal = path.join(dir, 'internal', 'shop.sexp');

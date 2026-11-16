@@ -26,6 +26,7 @@
 
 'use strict';
 
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -305,7 +306,8 @@ function corpusRows(corpus) {
 }
 
 function companionPaths(dir, name) {
-  return { header: path.join(dir, `${name}.emb.sexp`), blob: path.join(dir, `${name}.i8`) };
+  return { header: path.join(dir, `${name}.emb.sexp`), blob: path.join(dir, `${name}.i8`),
+           rows: path.join(dir, `${name}.rows`) };
 }
 
 function readCompanionHeader(file) {
@@ -330,11 +332,61 @@ async function embedBatch(url, key, model, texts) {
 }
 
 /**
+ * The digest of exactly what a companion embeds: SHA-256 over every
+ * row's document text (corpusRows), each as UTF-8 followed by one NUL
+ * byte, in row order.  A console accepts a companion while the loaded
+ * corpus has this digest, however often the corpus is rebuilt.
+ */
+function contentDigest(texts) {
+  const h = crypto.createHash('sha256');
+  for (const t of texts) { h.update(Buffer.from(t, 'utf8')); h.update(NUL); }
+  return h.digest('hex');
+}
+const NUL = Buffer.from([0]);
+
+/** Each row's own digest: the first ROW_DIGEST_BYTES of SHA-256 of its text. */
+const ROW_DIGEST_BYTES = 8;
+function rowDigests(texts) {
+  const out = Buffer.alloc(texts.length * ROW_DIGEST_BYTES);
+  texts.forEach((t, i) => crypto.createHash('sha256').update(Buffer.from(t, 'utf8')).digest()
+    .copy(out, i * ROW_DIGEST_BYTES, 0, ROW_DIGEST_BYTES));
+  return out;
+}
+
+function writeAtomically(file, data, encoding) {
+  fs.writeFileSync(file + '.tmp', data, encoding);
+  fs.renameSync(file + '.tmp', file);
+}
+
+function companionHeader(f) {
+  return `;;; Lisply embeddings companion for corpus "${f.name}" (CORPUS.md section 7)\n` + sxList([
+    ':version', String(COMPANION_VERSION),
+    ':corpus', sxString(f.name),
+    ':content-sha256', sxString(f.content),
+    ':row-digests', ':sha256-8',
+    ':corpus-checksum', sxString(String(f.checksum)),
+    ':corpus-generated-at', sxString(String(f.generatedAt)),
+    ':model', sxString(f.model || ''),
+    ':dims', String(f.dims), ':rows', String(f.rows),
+    ':dtype', ':int8', ':scale', f.scale.toFixed(6), ':normalized', 't',
+    ':document-text', sxString('relpath, newline, snippet'),
+    ':query-prefix', sxString(f.queryPrefix),
+    ':built-at', sxString(f.builtAt),
+    ':generator', sxString(GENERATOR)]) + '\n';
+}
+
+/**
  * Write the embeddings companion of the corpus in CORPUSFILE into OUTDIR
  * (default: an `embeddings' directory beside it).  Refuses a corpus that
  * is not :public: its text goes to the embedding server, and its search
- * results to AI clients.  Skips a companion that is already current
- * unless FORCE.
+ * results to AI clients.
+ *
+ * Incremental: a companion whose content digest matches is current and
+ * left alone (its header re-stamped if the corpus was only rebuilt); a
+ * companion from before content digests that the old rule (checksum and
+ * generated-at) still calls current gains its digests without embedding;
+ * otherwise only the rows whose text is not in the old companion are
+ * embedded, the rest copied over.  FORCE embeds every row.
  */
 async function embedCorpusFile(corpusFile, opts) {
   const log = opts.log || (() => {});
@@ -347,70 +399,132 @@ async function embedCorpusFile(corpusFile, opts) {
     e.exitCode = 3;
     throw e;
   }
-  if (!opts.url) throw new Error('no embedding server (--embed-url or LISPLY_EMBED_URL)');
   const outDir = opts.outDir || path.join(path.dirname(path.resolve(corpusFile)), 'embeddings');
   const out = companionPaths(outDir, name);
   const checksum = pget(corpus, 'checksum');
   const generatedAt = pget(corpus, 'generated-at');
-  const old = fs.existsSync(out.header) ? readCompanionHeader(out.header) : null;
-  if (!opts.force && old && fs.existsSync(out.blob)
-      && pget(old, 'corpus-checksum') === checksum
-      && pget(old, 'corpus-generated-at') === generatedAt
-      && (!opts.model || pget(old, 'model') === opts.model)
-      && pget(old, 'query-prefix') === opts.queryPrefix) {
-    log(`Embeddings current: ${out.header}`);
-    return { skipped: true, name };
-  }
-
   const texts = corpusRows(corpus);
   if (!texts.length) throw new Error(`${corpusFile}: no snippets to embed`);
-  const key = opts.keyFile ? fs.readFileSync(opts.keyFile, 'utf8').trim() : null;
-  const batch = Math.max(1, Number(opts.batch) || EMBED_BATCH);
-  const started = Date.now();
-  let dims = 0, model = opts.model, floats = null;
-  for (let i = 0; i < texts.length; i += batch) {
-    const { vectors, model: served } = await embedBatch(opts.url, key, opts.model, texts.slice(i, i + batch));
-    if (!model && served) model = served;
-    for (let r = 0; r < vectors.length; r++) {
-      const v = vectors[r];
-      if (!dims) { dims = v.length; floats = new Float32Array(texts.length * dims); }
-      if (v.length !== dims) throw new Error(`vector of ${v.length} dimensions after ${dims}`);
-      let norm = 0;
-      for (const x of v) norm += x * x;
-      norm = Math.sqrt(norm) || 1;
-      const base = (i + r) * dims;
-      for (let j = 0; j < dims; j++) floats[base + j] = v[j] / norm;
+  const content = contentDigest(texts);
+  const digests = rowDigests(texts);
+  const n = texts.length;
+
+  // The old companion, if it was made the same way (model, query prefix).
+  const oldHeader = fs.existsSync(out.header) ? readCompanionHeader(out.header) : null;
+  const oldRows = oldHeader && pget(oldHeader, 'rows');
+  const oldDims = oldHeader && pget(oldHeader, 'dims');
+  // (A small file's Buffer is a view on a shared pool: copy its own bytes.)
+  const oldBytes = oldHeader && fs.existsSync(out.blob) && fs.statSync(out.blob).size === oldRows * oldDims
+    ? fs.readFileSync(out.blob) : null;
+  const oldBlob = oldBytes ? new Int8Array(oldBytes.buffer.slice(oldBytes.byteOffset, oldBytes.byteOffset + oldBytes.length)) : null;
+  const compatible = !opts.force && oldBlob
+    && kwName(pget(oldHeader, 'dtype')) === 'int8'
+    && (!opts.model || pget(oldHeader, 'model') === opts.model)
+    && pget(oldHeader, 'query-prefix') === opts.queryPrefix;
+  const stamp = (fields) => companionHeader({
+    name, content, checksum, generatedAt, queryPrefix: opts.queryPrefix,
+    model: pget(oldHeader, 'model'), dims: oldDims, rows: n,
+    scale: Number(pget(oldHeader, 'scale')), builtAt: pget(oldHeader, 'built-at'), ...fields });
+
+  if (compatible && pget(oldHeader, 'content-sha256') === content && oldRows === n) {
+    if (pget(oldHeader, 'corpus-checksum') !== checksum || pget(oldHeader, 'corpus-generated-at') !== generatedAt
+        || !fs.existsSync(out.rows)) {
+      if (!fs.existsSync(out.rows)) writeAtomically(out.rows, digests);
+      writeAtomically(out.header, stamp({}), 'utf8');
+      log(`Embeddings current, the corpus rebuilt with the same text: ${out.header} re-stamped`);
+    } else {
+      log(`Embeddings current: ${out.header}`);
     }
-    if (!opts.quiet && (i / batch) % 20 === 0) log(`${name}: ${Math.min(i + batch, texts.length)} of ${texts.length}`);
+    return { skipped: true, embedded: 0, name };
+  }
+  if (compatible && !pget(oldHeader, 'content-sha256') && oldRows === n
+      && pget(oldHeader, 'corpus-checksum') === checksum && pget(oldHeader, 'corpus-generated-at') === generatedAt) {
+    // Built from this very corpus before digests existed: add them.
+    writeAtomically(out.rows, digests);
+    writeAtomically(out.header, stamp({}), 'utf8');
+    log(`Embeddings current; content and row digests added: ${out.header}`);
+    return { skipped: true, upgraded: true, embedded: 0, name };
   }
 
-  // One scale for the corpus: the largest component maps to 127.
+  // Rows whose text the old companion already embedded keep their vectors.
+  const reuse = new Map();
+  const oldDigests = compatible && fs.existsSync(out.rows) ? fs.readFileSync(out.rows) : null;
+  if (oldDigests && oldDigests.length === oldRows * ROW_DIGEST_BYTES) {
+    for (let r = oldRows - 1; r >= 0; r--) {
+      reuse.set(oldDigests.toString('hex', r * ROW_DIGEST_BYTES, (r + 1) * ROW_DIGEST_BYTES), r);
+    }
+  }
+  const source = new Int32Array(n).fill(-1);
+  const todo = [];
+  for (let i = 0; i < n; i++) {
+    const r = reuse.get(digests.toString('hex', i * ROW_DIGEST_BYTES, (i + 1) * ROW_DIGEST_BYTES));
+    if (r === undefined) todo.push(i); else source[i] = r;
+  }
+  log(`${name}: ${todo.length} of ${n} rows to embed, ${n - todo.length} kept`);
+
+  let dims = reuse.size ? oldDims : 0, model = opts.model || (reuse.size ? pget(oldHeader, 'model') : undefined);
+  const fresh = new Map();
+  if (todo.length) {
+    if (!opts.url) throw new Error('no embedding server (--embed-url or LISPLY_EMBED_URL)');
+    const key = opts.keyFile ? fs.readFileSync(opts.keyFile, 'utf8').trim() : null;
+    const batch = Math.max(1, Number(opts.batch) || EMBED_BATCH);
+    for (let b = 0; b < todo.length; b += batch) {
+      const rows = todo.slice(b, b + batch);
+      const { vectors, model: served } = await embedBatch(opts.url, key, opts.model, rows.map((i) => texts[i]));
+      if (!model && served) model = served;
+      vectors.forEach((v, k) => {
+        if (!dims) dims = v.length;
+        if (v.length !== dims) throw new Error(`vector of ${v.length} dimensions, the companion has ${dims} (--force rebuilds it)`);
+        let norm = 0;
+        for (const x of v) norm += x * x;
+        norm = Math.sqrt(norm) || 1;
+        fresh.set(rows[k], Float32Array.from(v, (x) => x / norm));
+      });
+      if (!opts.quiet && (b / batch) % 20 === 0) log(`${name}: ${Math.min(b + batch, todo.length)} of ${todo.length}`);
+    }
+  }
+
+  // One scale for the corpus.  Kept rows keep their bytes exactly while
+  // the old scale still holds every new component; otherwise all rows
+  // are rescaled together, the kept ones from their dequantized values.
+  const oldScale = reuse.size ? Number(pget(oldHeader, 'scale')) : 0;
   let max = 0;
-  for (const x of floats) { const a = Math.abs(x); if (a > max) max = a; }
-  const scale = 127 / (max || 1);
-  const ints = new Int8Array(floats.length);
-  for (let k = 0; k < floats.length; k++) ints[k] = Math.max(-127, Math.min(127, Math.round(floats[k] * scale)));
+  for (const v of fresh.values()) for (const x of v) { const a = Math.abs(x); if (a > max) max = a; }
+  const keepScale = reuse.size && oldScale > 0 && max * oldScale <= 127.5;
+  let scale = keepScale ? oldScale : 0;
+  if (!keepScale) {
+    for (let i = 0; i < n; i++) {
+      if (source[i] >= 0) for (let j = 0; j < dims; j++) {
+        const a = Math.abs(oldBlob[source[i] * dims + j] / oldScale); if (a > max) max = a;
+      }
+    }
+    scale = 127 / (max || 1);
+  }
+  const ints = new Int8Array(n * dims);
+  const clamp = (x) => Math.max(-127, Math.min(127, Math.round(x)));
+  for (let i = 0; i < n; i++) {
+    const base = i * dims;
+    if (source[i] >= 0) {
+      const from = source[i] * dims;
+      for (let j = 0; j < dims; j++) {
+        ints[base + j] = keepScale ? oldBlob[from + j] : clamp(oldBlob[from + j] / oldScale * scale);
+      }
+    } else {
+      const v = fresh.get(i);
+      for (let j = 0; j < dims; j++) ints[base + j] = clamp(v[j] * scale);
+    }
+  }
 
   fs.mkdirSync(outDir, { recursive: true });
-  // The vectors first: a header beside vectors of another build would
-  // describe them wrongly, and the consumer checks the size.
-  fs.writeFileSync(out.blob + '.tmp', Buffer.from(ints.buffer));
-  fs.renameSync(out.blob + '.tmp', out.blob);
-  const header = `;;; Lisply embeddings companion for corpus "${name}" (CORPUS.md section 7)\n` + sxList([
-    ':version', String(COMPANION_VERSION),
-    ':corpus', sxString(name),
-    ':corpus-checksum', sxString(String(checksum)),
-    ':corpus-generated-at', sxString(String(generatedAt)),
-    ':model', sxString(model || ''),
-    ':dims', String(dims), ':rows', String(texts.length),
-    ':dtype', ':int8', ':scale', scale.toFixed(6), ':normalized', 't',
-    ':document-text', sxString('relpath, newline, snippet'),
-    ':query-prefix', sxString(opts.queryPrefix),
-    ':built-at', sxString(new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')),
-    ':generator', sxString(GENERATOR)]) + '\n';
-  fs.writeFileSync(out.header, header, 'utf8');
-  log(`Embeddings written: ${out.header} (${texts.length} rows x ${dims}, ${((Date.now() - started) / 1000).toFixed(1)} s)`);
-  return { skipped: false, name, rows: texts.length, dims };
+  // The vectors and row digests first, the header last: the consumer
+  // checks the vectors' size against the header.
+  writeAtomically(out.blob, Buffer.from(ints.buffer));
+  writeAtomically(out.rows, digests);
+  writeAtomically(out.header, companionHeader({
+    name, content, checksum, generatedAt, queryPrefix: opts.queryPrefix, model, dims, rows: n, scale,
+    builtAt: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z') }), 'utf8');
+  log(`Embeddings written: ${out.header} (${n} rows x ${dims}; ${todo.length} embedded, ${n - todo.length} kept${keepScale ? '' : ', rescaled'})`);
+  return { skipped: false, embedded: todo.length, name, rows: n, dims };
 }
 
 function embedOptions(args, log) {
@@ -552,4 +666,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { readSexp, pget, extractSnippets, fixedWindows, chunkBoundaries, extractTerms, capText, globToRegexp, listFiles, corpusRows, embedCorpusFile };
+module.exports = { readSexp, pget, extractSnippets, fixedWindows, chunkBoundaries, extractTerms, capText, globToRegexp, listFiles, corpusRows, contentDigest, rowDigests, embedCorpusFile };

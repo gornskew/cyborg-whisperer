@@ -205,7 +205,8 @@ lexically as before.  The corpus format stays version 4.
 
 **Where.**  In an `embeddings/` subdirectory of the corpora directory,
 named by the corpus: `<corpora>/embeddings/<corpus>.emb.sexp` (the
-header) and `<corpus>.i8` (the vectors).  Not beside the corpora
+header), `<corpus>.i8` (the vectors) and `<corpus>.rows` (one digest
+per row).  Not beside the corpora
 themselves, where every `*.sexp` is loaded as a corpus.
 
 **The header**, an s-expression like the corpus file:
@@ -213,8 +214,10 @@ themselves, where every `*.sexp` is loaded as a corpus.
 ```lisp
 (:version 1                              ; the companion format
  :corpus "gendl"
- :corpus-checksum "994-6641869"          ; the corpus's :checksum ...
- :corpus-generated-at "2026-11-13T20:10:25Z"   ; ... and :generated-at
+ :content-sha256 "86c25f63..."           ; digest of the text embedded (below)
+ :row-digests :sha256-8                  ; <corpus>.rows: 8 bytes per row
+ :corpus-checksum "994-6664109"          ; the corpus it was built from,
+ :corpus-generated-at "2026-11-16T18:58:57Z"   ; for the record
  :model "Qwen3-Embedding-0.6B-Q8_0"       ; what the server called it
  :dims 1024 :rows 9397
  :dtype :int8 :scale 578.850263          ; stored value = round(v * scale)
@@ -236,10 +239,19 @@ Gendl corpus at 1024 dimensions, this int8 form keeps recall@10 at 0.995
 against the float vectors, at a quarter of the size, and lets a Captain
 score in integer arithmetic.
 
-**When a Captain uses it.**  Only when it was built from the very corpus
-loaded: `:corpus-checksum` and `:corpus-generated-at` equal the corpus's
-`:checksum` and `:generated-at`, `:rows` equals its snippet count, and
-the vector file is `rows x dims` bytes.  Otherwise it is stale and
+**The digests.**  `:content-sha256` is the SHA-256 of exactly what was
+embedded: every row's document text (relative path, newline, snippet)
+as UTF-8, each followed by one NUL byte, in row order.  `<corpus>.rows`
+holds, for each row, the first 8 bytes of the SHA-256 of that row's
+text alone.
+
+**When a Captain uses it.**  Only when it was built from the very text
+loaded: `:content-sha256` equals the digest of the loaded corpus's rows,
+`:rows` equals its snippet count, and the vector file is `rows x dims`
+bytes.  A corpus rebuilt with the same text -- re-indexed at every
+raise, or copied out of a new image whose sources did not change --
+keeps its companion.  (A companion from before content digests is
+matched by the corpus's `:checksum` and `:generated-at` instead.)  Otherwise it is stale and
 ignored, and the response's `corpora` says so (`embeddings`).  The query
 is embedded by the same model, behind `:query-prefix` (instruction-tuned
 models want one; it is whatever the builder was told), through an
@@ -257,8 +269,15 @@ node scripts/lisply-index.js --embed-corpus corpora/gendl.sexp --embed-instructi
 ```
 
 The server and key file come from `--embed-url` and `--embed-key-file`,
-or from `LISPLY_EMBED_URL` and `LISPLY_EMBED_KEY_FILE`.  A companion
-that is already current is left alone (`--force` rebuilds it).
+or from `LISPLY_EMBED_URL` and `LISPLY_EMBED_KEY_FILE`.  Rebuilds are
+incremental: a companion whose content digest matches is left alone
+(its header re-stamped if only the corpus's build time moved), and
+otherwise only the rows whose text the old companion did not embed go
+to the server; the rest keep their vectors, byte for byte while the old
+scale still holds every new component, rescaled together otherwise.
+So a source change costs the server only the changed rows.  A companion
+from before digests that still matches its corpus gains them without
+the server.  `--force` re-embeds every row.
 `regression-tests/lisply-index-embed.js` checks the format against a
 mock server.
 
