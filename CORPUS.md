@@ -278,6 +278,19 @@ scale still holds every new component, rescaled together otherwise.
 So a source change costs the server only the changed rows.  A companion
 from before digests that still matches its corpus gains them without
 the server.  `--force` re-embeds every row.
+
+**Unattended, for a deployment**: `--embed-dir <corpora>` does every
+corpus in the directory, one at a time and each name once, writing one
+line per corpus to `--embed-log FILE`.  A corpus is left stale -- and
+searched by keyword -- rather than embedded when more rows changed than
+`--embed-max-rows` (`LISPLY_EMBED_MAX_ROWS`); while `--embed-busy-url`
+(`LISPLY_EMBED_BUSY_URL`), the Prometheus endpoint of a llama.cpp server
+sharing the embedding server's hardware, reports requests processing or
+deferred at either of two reads `--embed-busy-interval` seconds apart
+(default 10); or when the embedding server does not answer.  An existing
+companion keeps its own query prefix; `LISPLY_EMBED_INSTRUCTION` is the
+default for a corpus that has none.  The key is read from its file, never
+taken on the command line.
 `regression-tests/lisply-index-embed.js` checks the format against a
 mock server.
 

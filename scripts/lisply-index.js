@@ -314,16 +314,30 @@ function readCompanionHeader(file) {
   try { return readSexp(fs.readFileSync(file, 'utf8')); } catch (e) { return null; }
 }
 
+/** An error meaning "the embedding server is not there now": an
+ * unattended run (--embed-dir) skips and leaves the corpus stale. */
+function unavailable(message) {
+  const e = new Error(message);
+  e.unavailable = true;
+  return e;
+}
+
 async function embedBatch(url, key, model, texts) {
   // A recognisable client, so the server's operator can tell a build's
   // batches from other load in the server's log.
   const headers = { 'Content-Type': 'application/json', 'User-Agent': 'lisply-index' };
   if (key) headers.Authorization = `Bearer ${key}`;
-  const res = await fetch(url, {
-    method: 'POST', headers,
-    body: JSON.stringify({ model: model || '', input: texts }),
-    signal: AbortSignal.timeout(120000),
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST', headers,
+      body: JSON.stringify({ model: model || '', input: texts }),
+      signal: AbortSignal.timeout(120000),
+    });
+  } catch (e) {
+    throw unavailable(`no answer from the embedding server (${(e.cause && (e.cause.code || e.cause.message)) || e.name || e.message})`);
+  }
+  if (res.status >= 500) throw unavailable(`the embedding server answered HTTP ${res.status}`);
   if (!res.ok) throw new Error(`embedding server answered HTTP ${res.status}`);
   const json = await res.json();
   const data = (json.data || []).slice().sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
@@ -417,12 +431,14 @@ async function embedCorpusFile(corpusFile, opts) {
   const oldBytes = oldHeader && fs.existsSync(out.blob) && fs.statSync(out.blob).size === oldRows * oldDims
     ? fs.readFileSync(out.blob) : null;
   const oldBlob = oldBytes ? new Int8Array(oldBytes.buffer.slice(oldBytes.byteOffset, oldBytes.byteOffset + oldBytes.length)) : null;
+  // A flag names the prefix; else the old companion keeps its own; else the default.
+  const queryPrefix = opts.queryPrefix ?? (oldHeader && pget(oldHeader, 'query-prefix')) ?? opts.defaultQueryPrefix ?? '';
   const compatible = !opts.force && oldBlob
     && kwName(pget(oldHeader, 'dtype')) === 'int8'
     && (!opts.model || pget(oldHeader, 'model') === opts.model)
-    && pget(oldHeader, 'query-prefix') === opts.queryPrefix;
+    && pget(oldHeader, 'query-prefix') === queryPrefix;
   const stamp = (fields) => companionHeader({
-    name, content, checksum, generatedAt, queryPrefix: opts.queryPrefix,
+    name, content, checksum, generatedAt, queryPrefix,
     model: pget(oldHeader, 'model'), dims: oldDims, rows: n,
     scale: Number(pget(oldHeader, 'scale')), builtAt: pget(oldHeader, 'built-at'), ...fields });
 
@@ -461,12 +477,24 @@ async function embedCorpusFile(corpusFile, opts) {
     if (r === undefined) todo.push(i); else source[i] = r;
   }
   log(`${name}: ${todo.length} of ${n} rows to embed, ${n - todo.length} kept`);
+  if (todo.length && opts.maxRows && todo.length > opts.maxRows) {
+    log(`${name}: ${todo.length} rows stale, over the ceiling of ${opts.maxRows}; nothing embedded`);
+    return { skipped: true, stale: todo.length, embedded: 0, name };
+  }
+  if (todo.length && opts.serverDown) throw unavailable(opts.serverDown);
+  if (todo.length && opts.busyUrl) {
+    const busy = await houseBusy(opts.busyUrl, readKey(opts.keyFile), opts.busyInterval);
+    if (busy) {
+      log(`${name}: ${busy}; nothing embedded`);
+      return { skipped: true, busy, embedded: 0, name };
+    }
+  }
 
   let dims = reuse.size ? oldDims : 0, model = opts.model || (reuse.size ? pget(oldHeader, 'model') : undefined);
   const fresh = new Map();
   if (todo.length) {
     if (!opts.url) throw new Error('no embedding server (--embed-url or LISPLY_EMBED_URL)');
-    const key = opts.keyFile ? fs.readFileSync(opts.keyFile, 'utf8').trim() : null;
+    const key = readKey(opts.keyFile);
     const batch = Math.max(1, Number(opts.batch) || EMBED_BATCH);
     for (let b = 0; b < todo.length; b += batch) {
       const rows = todo.slice(b, b + batch);
@@ -521,23 +549,125 @@ async function embedCorpusFile(corpusFile, opts) {
   writeAtomically(out.blob, Buffer.from(ints.buffer));
   writeAtomically(out.rows, digests);
   writeAtomically(out.header, companionHeader({
-    name, content, checksum, generatedAt, queryPrefix: opts.queryPrefix, model, dims, rows: n, scale,
+    name, content, checksum, generatedAt, queryPrefix, model, dims, rows: n, scale,
     builtAt: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z') }), 'utf8');
   log(`Embeddings written: ${out.header} (${n} rows x ${dims}; ${todo.length} embedded, ${n - todo.length} kept${keepScale ? '' : ', rescaled'})`);
   return { skipped: false, embedded: todo.length, name, rows: n, dims };
 }
 
+function readKey(file) {
+  return file && fs.existsSync(file) && fs.statSync(file).isFile() ? fs.readFileSync(file, 'utf8').trim() : null;
+}
+
+/**
+ * Whether a server sharing the embedding server's hardware is at work:
+ * its Prometheus endpoint URL (a llama.cpp server's /metrics), read with
+ * the same key, twice INTERVAL seconds apart -- a client's back-to-back
+ * calls leave idle moments between them.  Returns null when both reads
+ * show no request processing or deferred, else the reason to wait.  A
+ * read that fails counts as busy: when in doubt, add no load.
+ */
+async function houseBusy(url, key, intervalSeconds) {
+  const read = async () => {
+    const headers = { 'User-Agent': 'lisply-index' };
+    if (key) headers.Authorization = `Bearer ${key}`;
+    let text;
+    try {
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(5000) });
+      if (!res.ok) return `the busy check answered HTTP ${res.status}`;
+      text = await res.text();
+    } catch (e) {
+      return `the busy check got no answer (${(e.cause && (e.cause.code || e.cause.message)) || e.name})`;
+    }
+    const value = (metric) => {
+      const m = text.match(new RegExp(`^${metric}\\s+([-+0-9.eE]+)`, 'm'));
+      return m ? Number(m[1]) : NaN;
+    };
+    const processing = value('llamacpp:requests_processing');
+    const deferred = value('llamacpp:requests_deferred');
+    if (Number.isNaN(processing) || Number.isNaN(deferred)) return 'the busy check found no request metrics';
+    if (processing > 0 || deferred > 0) return `the house server is busy (${processing} processing, ${deferred} deferred)`;
+    return null;
+  };
+  const first = await read();
+  if (first) return first;
+  await new Promise((r) => setTimeout(r, intervalSeconds * 1000));
+  return read();
+}
+
+/** The :corpus name from the head of a corpus file, without reading it all. */
+function corpusNameOf(file) {
+  const fd = fs.openSync(file, 'r');
+  try {
+    const buf = Buffer.alloc(4096);
+    const n = fs.readSync(fd, buf, 0, buf.length, 0);
+    const m = buf.toString('utf8', 0, n).match(/:corpus "([^"]+)"/);
+    return m ? m[1] : path.basename(file, '.sexp');
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/**
+ * Bring the companions of every corpus in DIR current, unattended: the
+ * step a deployment runs after it stows its corpora.  Corpora go one at a
+ * time, each name once.  Nothing is embedded for a corpus with more rows
+ * to embed than OPTS.maxRows, while OPTS.busyUrl says the house is busy,
+ * or once the embedding server has not answered; each such corpus stays
+ * stale (a console then searches it by keyword).  One line per corpus
+ * goes to OPTS.logFile and to stderr.
+ */
+async function embedDir(dir, opts) {
+  const say = (name, outcome) => {
+    const line = `${new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')} ${name} ${outcome}`;
+    if (opts.logFile) {
+      fs.mkdirSync(path.dirname(path.resolve(opts.logFile)), { recursive: true });
+      fs.appendFileSync(opts.logFile, line + '\n');
+    }
+    if (!opts.quiet) console.error('[lisply-index] ' + line);
+  };
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.sexp')).sort().map((f) => path.join(dir, f));
+  const seen = new Map();
+  let down = null;
+  for (const file of files) {
+    const name = corpusNameOf(file);
+    if (seen.has(name)) { say(name, `same corpus as ${path.basename(seen.get(name))}; done once`); continue; }
+    seen.set(name, file);
+    try {
+      const r = await embedCorpusFile(file, { ...opts, log: () => {}, serverDown: down });
+      if (r.busy) say(name, `skipped: ${r.busy}; stays stale`);
+      else if (r.stale) say(name, `${r.stale} rows stale, over the ceiling of ${opts.maxRows}; nothing embedded`);
+      else if (r.skipped) say(name, r.upgraded ? 'current (digests added)' : 'current');
+      else say(name, `${r.embedded} rows embedded, ${r.rows - r.embedded} kept`);
+    } catch (e) {
+      if (e.unavailable) { down = e.message; say(name, `skipped: ${e.message}; stays stale`); }
+      else if (e.exitCode === 3) say(name, 'skipped: not a :public corpus');
+      else say(name, `error: ${e.message}`);
+    }
+  }
+}
+
 function embedOptions(args, log) {
-  const prefix = args['embed-query-prefix'] !== undefined
+  // The query prefix: a flag names it; otherwise an existing companion
+  // keeps its own, and only a corpus with none takes the default
+  // instruction (LISPLY_EMBED_INSTRUCTION) -- so an unattended run never
+  // re-embeds a whole corpus because a default changed.
+  const explicit = args['embed-query-prefix'] !== undefined
     ? args['embed-query-prefix']
-    : (args['embed-instruction'] ? `Instruct: ${args['embed-instruction']}\nQuery: ` : '');
+    : (args['embed-instruction'] ? `Instruct: ${args['embed-instruction']}\nQuery: ` : undefined);
+  const instruction = process.env.LISPLY_EMBED_INSTRUCTION;
   return {
     url: args['embed-url'] || process.env.LISPLY_EMBED_URL,
     keyFile: args['embed-key-file'] || process.env.LISPLY_EMBED_KEY_FILE,
     model: args['embed-model'],
-    queryPrefix: prefix,
+    queryPrefix: explicit,
+    defaultQueryPrefix: instruction ? `Instruct: ${instruction}\nQuery: ` : undefined,
     batch: args['embed-batch'],
     outDir: args['embed-out'],
+    maxRows: Number(args['embed-max-rows'] || process.env.LISPLY_EMBED_MAX_ROWS) || 0,
+    busyUrl: args['embed-busy-url'] || process.env.LISPLY_EMBED_BUSY_URL,
+    busyInterval: Number(args['embed-busy-interval'] || 10),
+    logFile: args['embed-log'],
     force: args.force,
     quiet: args.quiet,
     log,
@@ -565,19 +695,26 @@ function usage() {
        [--distribution public|internal] [--subdirs a,b] [--repo NAME] [--repo-root DIR]
        [--max-lines N] [--max-chars N] [--quiet] [--embed EMBED-OPTIONS]
        lisply-index --embed-corpus CORPUS-FILE [EMBED-OPTIONS]
+       lisply-index --embed-dir CORPORA-DIR [--embed-log FILE] [EMBED-OPTIONS]
 EMBED-OPTIONS: [--embed-url URL] [--embed-key-file FILE] [--embed-model NAME]
        [--embed-instruction TEXT | --embed-query-prefix TEXT] [--embed-batch N]
-       [--embed-out DIR] [--force]
+       [--embed-out DIR] [--embed-max-rows N] [--embed-busy-url URL]
+       [--embed-busy-interval SECONDS] [--force]
 Reads DIR/lisply-corpus.sexp when present; flags override it.  --embed, or
 --embed-corpus for a corpus already built, writes its embeddings companion
 (CORPUS.md section 7) beside it in embeddings/, for a :public corpus only;
-the server and key file default to LISPLY_EMBED_URL and LISPLY_EMBED_KEY_FILE.`);
+the server and key file default to LISPLY_EMBED_URL and LISPLY_EMBED_KEY_FILE.
+--embed-dir does every corpus in a directory, unattended: above --embed-max-rows
+rows to embed (LISPLY_EMBED_MAX_ROWS), while --embed-busy-url reports work
+(LISPLY_EMBED_BUSY_URL, read twice), or with the server down, it embeds
+nothing and the corpus stays stale; one line per corpus to --embed-log.`);
 }
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const log = (m) => { if (!args.quiet) console.error('[lisply-index] ' + m); };
   if (args['embed-corpus'] && !args.help) return embedCorpusFile(args['embed-corpus'], embedOptions(args, log));
+  if (args['embed-dir'] && !args.help) return embedDir(args['embed-dir'], embedOptions(args, log));
   if (args.help || !args.root || !args.out) { usage(); process.exit(args.help ? 0 : 2); }
   const root = path.resolve(args.root);
   const configFile = args.config || path.join(root, 'lisply-corpus.sexp');
@@ -666,4 +803,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { readSexp, pget, extractSnippets, fixedWindows, chunkBoundaries, extractTerms, capText, globToRegexp, listFiles, corpusRows, contentDigest, rowDigests, embedCorpusFile };
+module.exports = { readSexp, pget, extractSnippets, fixedWindows, chunkBoundaries, extractTerms, capText, globToRegexp, listFiles, corpusRows, contentDigest, rowDigests, embedCorpusFile, embedDir, houseBusy };

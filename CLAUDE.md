@@ -38,7 +38,9 @@ did not change.
 - `regression-tests/lisply-index-embed.js` — the indexer's embeddings
   companion (CORPUS.md section 7) against a mock embedding server; run
   it after touching `lisply-index.js`.  Companions are built only for
-  `:public` corpora: search results reach cloud AI clients.
+  `:public` corpora: search results reach cloud AI clients.  It covers
+  `--embed-dir` (the unattended step a deployment runs at a raise: the
+  row ceiling, the busy check, a down server) with mock servers.
 - `attic/` — the retired container-management subsystem, history only
 
 ## Working on it

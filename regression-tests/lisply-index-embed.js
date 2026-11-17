@@ -25,6 +25,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const http = require('http');
+const net = require('net');
 const { execFile } = require('child_process');
 const { readSexp, pget, corpusRows, contentDigest, rowDigests } = require('../scripts/lisply-index');
 
@@ -34,6 +35,9 @@ let requests = 0;
 let sawKey = null;
 let sawAgent = null;
 let sawInputs = [];
+// The house's metrics, as a llama.cpp server reports them (GET /metrics).
+let metricsState = { processing: 0, deferred: 0 };
+let metricsReads = 0;
 
 // The mock: each text's vector is a deterministic function of its length,
 // so the test can say which row is which.
@@ -51,6 +55,16 @@ const server = http.createServer((req, res) => {
   let body = '';
   req.on('data', (c) => { body += c; });
   req.on('end', () => {
+    if (req.method === 'GET' && req.url === '/metrics') {
+      metricsReads++;
+      let { processing, deferred } = metricsState;
+      if (metricsState.idleThenBusy) {   // idle at one read, busy at the next
+        processing = metricsReads % 2 ? 0 : 1;
+      }
+      res.setHeader('Content-Type', 'text/plain');
+      res.end(`# HELP llamacpp:requests_processing\nllamacpp:requests_processing ${processing}\nllamacpp:requests_deferred ${deferred}\n`);
+      return;
+    }
     requests++;
     sawKey = req.headers.authorization || null;
     sawAgent = req.headers['user-agent'] || null;
@@ -187,6 +201,74 @@ server.listen(0, '127.0.0.1', async () => {
             const row = Array.from(ints3.slice(i * DIMS, (i + 1) * DIMS));
             return row.indexOf(peak(i)) === t.length % DIMS && (t.includes('SPIKE') ? peak(i) === 127 : peak(i) === 120);
           }));
+
+    // 5. --embed-dir: the unattended step a deployment runs after it
+    //    stows its corpora (CORPUS.md section 7).
+    const corpora = path.join(dir, 'dirmode');
+    const demo = path.join(corpora, 'demo.sexp');
+    const logFile = path.join(corpora, 'embeddings', 'rebuild.log');
+    const metrics = `http://127.0.0.1:${server.address().port}/metrics`;
+    // A port nothing listens on: take one from the system and let it go.
+    const closedPort = await new Promise((res) => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => res(p)); }); });
+    const closed = `http://127.0.0.1:${closedPort}/v1/embeddings`;
+    const src2 = path.join(dir, 'src2');
+    fs.mkdirSync(src2);
+    fs.writeFileSync(path.join(src2, 'a.lisp'), '(defun one () 1)\n');
+    fs.writeFileSync(path.join(src2, 'b.md'), '# B\nbee\n');
+    r = await run(['--root', src2, '--name', 'demo', '--out', demo, '--quiet']);
+    r = await run(['--root', src, '--name', 'shop', '--distribution', 'internal', '--out', path.join(corpora, 'shop.sexp'), '--quiet']);
+    fs.copyFileSync(demo, path.join(corpora, 'twin.sexp'));         // the same corpus twice
+    const lastLines = (k) => fs.readFileSync(logFile, 'utf8').trim().split('\n').slice(-k).join('\n');
+    const dirRun = (extra) => run(['--embed-dir', corpora, '--embed-log', logFile, '--quiet',
+                                   '--embed-url', url, '--embed-instruction', 'Find code',
+                                   '--embed-busy-url', metrics, '--embed-busy-interval', '0.2',
+                                   '--embed-max-rows', '4', ...extra]);
+    metricsState = { processing: 0, deferred: 0 };
+    asked = requests;
+    r = await dirRun([]);
+    check('--embed-dir embeds a corpus with no companion, under the ceiling, the house idle',
+          r.status === 0 && requests > asked && /demo \d+ rows embedded, 0 kept/.test(lastLines(3)));
+    check('...reads the house\'s metrics twice before embedding', metricsReads >= 2);
+    check('...does a corpus name once, and skips an :internal corpus',
+          /demo same corpus as demo.sexp; done once/.test(lastLines(3)) && /shop skipped: not a :public corpus/.test(lastLines(3)));
+    asked = requests;
+    const readsBefore = metricsReads;
+    r = await run(['--root', src2, '--name', 'demo', '--out', demo, '--quiet']);   // a raise: re-indexed, same text
+    r = await dirRun([]);
+    check('a raise with nothing changed sends nothing, not even a busy check',
+          r.status === 0 && requests === asked && metricsReads === readsBefore && /demo current/.test(lastLines(3)));
+    fs.appendFileSync(path.join(src2, 'b.md'), '# C\nsea\n');
+    r = await run(['--root', src2, '--name', 'demo', '--out', demo, '--quiet']);
+    const inputsAt = sawInputs.length;
+    r = await dirRun([]);
+    check('a small change embeds only its rows',
+          r.status === 0 && sawInputs.length - inputsAt >= 1 && sawInputs.length - inputsAt < corpusRows(readSexp(fs.readFileSync(demo, 'utf8'))).length
+          && /demo \d+ rows embedded, \d+ kept/.test(lastLines(3)));
+    const companionNow = () => fs.readFileSync(path.join(corpora, 'embeddings', 'demo.emb.sexp'), 'utf8');
+    fs.appendFileSync(path.join(src2, 'a.lisp'), '\n(defun two () 2)\n');
+    r = await run(['--root', src2, '--name', 'demo', '--out', demo, '--quiet']);
+    let kept = companionNow();
+    asked = requests;
+    r = await dirRun(['--embed-max-rows', '0.5']);      // a ceiling below one row
+    check('over the ceiling: nothing embedded, the companion untouched, "rows stale" logged',
+          r.status === 0 && requests === asked && companionNow() === kept && /demo \d+ rows stale, over the ceiling of 0.5; nothing embedded/.test(lastLines(3)));
+    metricsState = { processing: 1, deferred: 0 };
+    r = await dirRun([]);
+    check('house busy: nothing embedded, the companion untouched, "busy" logged',
+          r.status === 0 && requests === asked && companionNow() === kept
+          && /demo skipped: the house server is busy \(1 processing, 0 deferred\); stays stale/.test(lastLines(3)));
+    metricsState = { processing: 0, deferred: 0, idleThenBusy: true };
+    r = await dirRun([]);
+    check('a house idle at the first read and busy at the second still counts as busy',
+          r.status === 0 && requests === asked && /demo skipped: the house server is busy/.test(lastLines(3)));
+    metricsState = { processing: 0, deferred: 0 };
+    r = await run(['--embed-dir', corpora, '--embed-log', logFile, '--quiet', '--embed-url', closed,
+                   '--embed-busy-url', metrics, '--embed-busy-interval', '0.2', '--embed-max-rows', '4']);
+    check('embedding server down: a skip, not an error; the companion untouched; "stays stale" logged',
+          r.status === 0 && companionNow() === kept
+          && /demo skipped: no answer from the embedding server \(ECONNREFUSED\); stays stale/.test(lastLines(3)));
+    r = await dirRun([]);
+    check('and when it is back, the next run catches up', r.status === 0 && requests > asked && /demo \d+ rows embedded/.test(lastLines(3)));
 
     // 3. An :internal corpus is refused, and nothing is sent.
     const internal = path.join(dir, 'internal', 'shop.sexp');
